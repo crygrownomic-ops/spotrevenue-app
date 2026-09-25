@@ -1,0 +1,53 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": { "kecamatan": "PONTIANAK KOTA" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [109.3200, -0.0200],
+            [109.3500, -0.0200],
+            [109.3500, -0.0500],
+            [109.3200, -0.0500],
+            [109.3200, -0.0200]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "kecamatan": "PONTIANAK TIMUR" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [109.3501, -0.0100],
+            [109.3900, -0.0100],
+            [109.3900, -0.0400],
+            [109.3501, -0.0400],
+            [109.3501, -0.0100]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "kecamatan": "PONTIANAK SELATAN" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [109.3250, -0.0510],
+            [109.3650, -0.0510],
+            [109.3650, -0.0850],
+            [109.3250, -0.0850],
+            [109.3250, -0.0510]
+          ]
+        ]
+      }
+    }
+  ]
+}

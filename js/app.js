@@ -1,5 +1,5 @@
 /* ==============================================================================
-   SpotRevenue Application Controller v1.6 (Month Filter, Average & Salesman Code)
+   SpotRevenue Application Controller v1.7 (KPI Analytics, Heatmap & Performance Filter)
    Lead Developer: Urai Ikhsan Fadhilah
    ============================================================================== */
 
@@ -66,6 +66,55 @@ let activeMetric = 'val';
 window.activeMetric = activeMetric;
 let activeOutletData = [];
 let selectedOutlet = null;
+let activePerfFilter = null; // 'top', 'low', atau null
+let isHeatmapActive = false; // Status mode heatmap
+
+// --- SISTEM KEAMANAN & AKSES PIN GATE ---
+const CORRECT_PIN = "2026";
+
+function checkAppAuthentication() {
+  const authModal = document.getElementById('auth-modal');
+  const isAuth = sessionStorage.getItem('spotrevenue_auth');
+
+  if (isAuth === 'true') {
+    if (authModal) authModal.style.display = 'none';
+  } else {
+    if (authModal) authModal.style.display = 'flex';
+    setupAuthListeners();
+  }
+}
+
+function setupAuthListeners() {
+  const btnSubmit = document.getElementById('btn-submit-auth');
+  const inputPin = document.getElementById('auth-pin-input');
+  const errorMsg = document.getElementById('auth-error-msg');
+  const authModal = document.getElementById('auth-modal');
+
+  const handleLogin = () => {
+    if (inputPin && inputPin.value === CORRECT_PIN) {
+      sessionStorage.setItem('spotrevenue_auth', 'true');
+      if (authModal) authModal.style.display = 'none';
+      showToast('🔓 Akses Diberikan, Selamat Bekerja!');
+    } else {
+      if (errorMsg) errorMsg.style.display = 'block';
+      if (inputPin) {
+        inputPin.value = '';
+        inputPin.focus();
+      }
+    }
+  };
+
+  if (btnSubmit) {
+    btnSubmit.addEventListener('click', handleLogin);
+  }
+
+  if (inputPin) {
+    inputPin.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') handleLogin();
+    });
+    setTimeout(() => inputPin.focus(), 100);
+  }
+}
 
 function showLoading(text) {
   const overlay = document.getElementById('loading-overlay');
@@ -88,6 +137,8 @@ function showToast(msg) {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
+  checkAppAuthentication();
+
   const sidebar = document.getElementById('sidebar');
   const triggerZone = document.getElementById('sidebar-trigger-zone');
   const btnPin = document.getElementById('btn-pin-sidebar');
@@ -141,6 +192,36 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
+  // Tombol Toggle Heatmap
+  const btnToggleHeat = document.getElementById('btn-toggle-heatmap');
+  if (btnToggleHeat) {
+    btnToggleHeat.addEventListener('click', () => {
+      isHeatmapActive = !isHeatmapActive;
+      btnToggleHeat.innerText = isHeatmapActive ? '📍 Matikan Heatmap (Kembali ke Marker)' : '🔥 Aktifkan Mode Heatmap Peta';
+      btnToggleHeat.style.background = isHeatmapActive ? '#dc2626' : '#059669';
+      
+      applyFilters();
+      showToast(isHeatmapActive ? '🔥 Mode Heatmap Peta Aktif' : '📍 Mode Marker Toko Aktif');
+    });
+  }
+
+  // Tombol Quick Performance Filter (Top Tier vs Low Performer)
+  const perfFilterBtns = document.querySelectorAll('.btn-perf-filter');
+  perfFilterBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const perfType = btn.getAttribute('data-perf');
+      if (activePerfFilter === perfType) {
+        activePerfFilter = null;
+        btn.style.outline = 'none';
+      } else {
+        perfFilterBtns.forEach(b => b.style.outline = 'none');
+        activePerfFilter = perfType;
+        btn.style.outline = '2px solid #ffffff';
+      }
+      applyFilters();
+    });
+  });
+
   const metricButtons = document.querySelectorAll('.btn-metric');
   metricButtons.forEach(btn => {
     btn.addEventListener('click', async () => {
@@ -157,6 +238,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupFilterListeners();
   initProvinsiDropdown();
   await updateAllMetricStatuses();
+
+  const elProv = document.getElementById('select-provinsi');
+  if (elProv && typeof loadProvinceBoundary === 'function') {
+    loadProvinceBoundary(elProv.value || '61');
+  }
 
   await autoDetectAndLoadMetric();
 });
@@ -218,7 +304,6 @@ function setupMonthFilterListeners() {
   });
 }
 
-// FUNGSI KALKULASI REKALKULASI OMSET TERPILIH & AVERAGE
 function getOutletMetrics(outlet) {
   if (!outlet.monthly_sales || selectedMonths.length === 0) {
     const total = outlet.total_sales || 0;
@@ -275,12 +360,61 @@ async function autoDetectAndLoadMetric() {
   }
 }
 
+function processAndGroupOutlets(rawData) {
+  const outletMap = new Map();
+
+  rawData.forEach(item => {
+    const key = item.customer_number || item.id || item.name;
+    if (!key) return;
+
+    if (!outletMap.has(key)) {
+      const newItem = JSON.parse(JSON.stringify(item));
+      if (!Array.isArray(newItem.salespersons)) {
+        newItem.salespersons = newItem.salespersons ? [newItem.salespersons] : [];
+      }
+      if (!newItem.monthly_sales) newItem.monthly_sales = {};
+      outletMap.set(key, newItem);
+    } else {
+      const existing = outletMap.get(key);
+
+      const incomingSales = Array.isArray(item.salespersons) ? item.salespersons : (item.salespersons ? [item.salespersons] : []);
+      incomingSales.forEach(s => {
+        if (s && !existing.salespersons.includes(s)) {
+          existing.salespersons.push(s);
+        }
+      });
+
+      if (item.monthly_sales) {
+        Object.keys(item.monthly_sales).forEach(m => {
+          existing.monthly_sales[m] = (existing.monthly_sales[m] || 0) + (item.monthly_sales[m] || 0);
+        });
+      }
+
+      if (item.top_brands && Array.isArray(item.top_brands)) {
+        if (!existing.top_brands) existing.top_brands = [];
+        item.top_brands.forEach(tb => {
+          const found = existing.top_brands.find(b => b.brand === tb.brand);
+          if (found) {
+            found.sales += (tb.sales || 0);
+          } else {
+            existing.top_brands.push({ brand: tb.brand, sales: tb.sales || 0 });
+          }
+        });
+        existing.top_brands.sort((a, b) => b.sales - a.sales);
+      }
+    }
+  });
+
+  return Array.from(outletMap.values());
+}
+
 async function loadMetricDataToMap(metric) {
   const storeName = `outlets_${metric}`;
   if (window.db && window.db[storeName]) {
     const count = await window.db[storeName].count();
     if (count > 0) {
-      activeOutletData = await window.db[storeName].toArray();
+      const rawData = await window.db[storeName].toArray();
+      activeOutletData = processAndGroupOutlets(rawData);
       populateAllDropdowns();
       applyFilters();
     } else {
@@ -435,7 +569,7 @@ function resetFilterDropdowns() {
 
 function setupFilterListeners() {
   const filterIds = [
-    'select-kabupaten', 'select-kecamatan', 'select-rayon', 'select-class', 'select-tipe', 'select-jenis',
+    'select-provinsi', 'select-kabupaten', 'select-kecamatan', 'select-rayon', 'select-class', 'select-tipe', 'select-jenis',
     'select-divisi-sales', 'select-category-sales', 'select-salesperson', 'select-tahun',
     'select-grup', 'select-brand', 'select-subbrand', 'select-subbrand-list'
   ];
@@ -443,7 +577,15 @@ function setupFilterListeners() {
   filterIds.forEach(id => {
     const el = document.getElementById(id);
     if (el) {
-      el.addEventListener('change', () => applyFilters());
+      el.addEventListener('change', (e) => {
+        if (id === 'select-provinsi') {
+          const provCode = e.target.value;
+          if (typeof loadProvinceBoundary === 'function') {
+            loadProvinceBoundary(provCode);
+          }
+        }
+        applyFilters();
+      });
     }
   });
 }
@@ -508,19 +650,76 @@ function applyFilters() {
     item.current_avg = metrics.avg;
   });
 
-  if (typeof renderOutletMarkers === 'function') {
+  // Terapkan Quick Performance Filter (Top Tier vs Low Performer) jika aktif
+  if (activePerfFilter && filtered.length > 0) {
+    // Urutkan berdasarkan total tertinggi ke terendah
+    const sortedCopy = [...filtered].sort((a, b) => b.current_total - a.current_total);
+    const thresholdIndex = Math.ceil(sortedCopy.length * 0.25); // Ambil kuartil atas (Top 25%)
+
+    if (activePerfFilter === 'top') {
+      const topIds = new Set(sortedCopy.slice(0, thresholdIndex).map(o => o.customer_number || o.id));
+      filtered = filtered.filter(o => topIds.has(o.customer_number || o.id));
+    } else if (activePerfFilter === 'low') {
+      const lowIds = new Set(sortedCopy.slice(sortedCopy.length - thresholdIndex).map(o => o.customer_number || o.id));
+      filtered = filtered.filter(o => lowIds.has(o.customer_number || o.id));
+    }
+  }
+
+  // --- KALKULASI EXECUTIVE SUMMARY KPI ---
+  let totalOmsetAll = 0;
+  const kecMapCount = {};
+
+  filtered.forEach(item => {
+    totalOmsetAll += item.current_total;
+    const kec = Array.isArray(item.kecamatan) ? item.kecamatan[0] : (item.kecamatan || 'Lainnya');
+    kecMapCount[kec] = (kecMapCount[kec] || 0) + item.current_total;
+  });
+
+  let topKecName = '-';
+  let maxKecVal = -1;
+  Object.keys(kecMapCount).forEach(k => {
+    if (kecMapCount[k] > maxKecVal) {
+      maxKecVal = kecMapCount[k];
+      topKecName = k;
+    }
+  });
+
+  const avgPerOutlet = filtered.length > 0 ? (totalOmsetAll / filtered.length) : 0;
+  const metricLabel = activeMetric.toUpperCase();
+
+  // Update DOM KPI Bar
+  const elKpiOutlet = document.getElementById('kpi-total-outlet');
+  const elKpiOmset = document.getElementById('kpi-total-omset');
+  const elKpiAvg = document.getElementById('kpi-avg-outlet');
+  const elKpiKec = document.getElementById('kpi-top-kec');
+
+  if (elKpiOutlet) elKpiOutlet.innerText = `${filtered.length.toLocaleString('id-ID')} Toko`;
+  if (elKpiOmset) elKpiOmset.innerText = activeMetric === 'val' ? `Rp ${totalOmsetAll.toLocaleString('id-ID')}` : `${totalOmsetAll.toLocaleString('id-ID')} ${metricLabel}`;
+  if (elKpiAvg) elKpiAvg.innerText = activeMetric === 'val' ? `Rp ${Math.round(avgPerOutlet).toLocaleString('id-ID')}` : `${Math.round(avgPerOutlet).toLocaleString('id-ID')} ${metricLabel}`;
+  if (elKpiKec) elKpiKec.innerText = topKecName;
+
+  // Render Peta (Marker atau Heatmap)
+  if (isHeatmapActive && typeof renderHeatmapLayer === 'function') {
+    renderHeatmapLayer(filtered);
+  } else if (typeof renderOutletMarkers === 'function') {
     renderOutletMarkers(filtered);
   }
 
   if (selectedOutlet) {
-    showOutletDetail(selectedOutlet);
+    const updatedOutlet = filtered.find(o => (o.id === selectedOutlet.id || o.customer_number === selectedOutlet.customer_number));
+    if (updatedOutlet) {
+      showOutletDetail(updatedOutlet, false);
+    }
   }
 }
 
-function showOutletDetail(outlet) {
+function showOutletDetail(outlet, autoSwitchTab = true) {
   selectedOutlet = outlet;
-  const btnDetail = document.querySelector('.btn-module-nav[data-modul="modul-detail"]');
-  if (btnDetail) btnDetail.click();
+
+  if (autoSwitchTab) {
+    const btnDetail = document.querySelector('.btn-module-nav[data-modul="modul-detail"]');
+    if (btnDetail) btnDetail.click();
+  }
 
   const card = document.getElementById('outlet-detail-card');
   if (!card) return;
@@ -540,10 +739,14 @@ function showOutletDetail(outlet) {
   document.getElementById('outlet-kelas').innerText = Array.isArray(outlet.class) ? outlet.class.join(', ') : (outlet.class || '-');
   document.getElementById('outlet-tipe').innerText = Array.isArray(outlet.tipe) ? outlet.tipe.join(', ') : (outlet.tipe || '-');
 
-  // RENDERING KODE SALESMAN
-  const salesmanVal = Array.isArray(outlet.salespersons) && outlet.salespersons.length > 0 
-    ? outlet.salespersons.join(', ') 
-    : (outlet.salespersons || '-');
+  let salesmanVal = '-';
+  if (Array.isArray(outlet.salespersons) && outlet.salespersons.length > 0) {
+    const uniqueSales = [...new Set(outlet.salespersons.filter(Boolean))];
+    salesmanVal = uniqueSales.join(', ');
+  } else if (typeof outlet.salespersons === 'string' && outlet.salespersons.trim() !== '') {
+    salesmanVal = outlet.salespersons;
+  }
+
   const elSalesman = document.getElementById('outlet-salesman');
   if (elSalesman) elSalesman.innerText = salesmanVal;
 

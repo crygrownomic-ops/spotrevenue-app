@@ -11,10 +11,31 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/dexie@3.2.4/dist/dexie.js"></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <!-- Plugin Leaflet Heatmap untuk Visualisasi Kepadatan Omset -->
+  <script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
 
   <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
+
+  <!-- MODAL KEAMANAN / PIN GATE -->
+  <div id="auth-modal" style="position: fixed; inset: 0; background: rgba(15, 41, 30, 0.95); z-index: 9999; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(5px);">
+    <div style="background: #ffffff; padding: 35px 30px; border-radius: 14px; width: 100%; max-width: 380px; box-shadow: 0 25px 30px -5px rgba(0,0,0,0.4); text-align: center; font-family: 'Segoe UI', sans-serif;">
+      <div style="font-size: 32px; margin-bottom: 12px;">🔐</div>
+      <h2 style="color: #1b4332; margin-bottom: 8px; font-size: 20px; font-weight: 700;">SpotRevenue Security</h2>
+      <p style="color: #64748b; font-size: 13px; margin-bottom: 20px; line-height: 1.4;">Masukkan PIN Akses Teritorial untuk masuk ke dashboard utama.</p>
+      
+      <input type="password" id="auth-pin-input" placeholder="Masukkan PIN Akses..." style="width: 100%; padding: 12px 15px; border: 1.5px solid #cbd5e1; border-radius: 8px; font-size: 16px; text-align: center; letter-spacing: 3px; margin-bottom: 15px; outline: none; transition: border-color 0.2s;" onfocus="this.style.borderColor='#10b981'" onblur="this.style.borderColor='#cbd5e1'" />
+      
+      <button id="btn-submit-auth" style="width: 100%; background: #10b981; color: white; border: none; padding: 12px; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 14px; transition: background 0.2s;">Buka Akses Dashboard</button>
+      
+      <div id="auth-error-msg" style="color: #ef4444; font-size: 12px; margin-top: 12px; display: none; font-weight: 600;">⚠️ PIN Akses Salah! Silakan coba lagi.</div>
+      
+      <div style="margin-top: 25px; font-size: 11px; color: #94a3b8; border-top: 1px solid #f1f5f9; padding-top: 15px;">
+        Lead Developer: Urai Ikhsan Fadhilah
+      </div>
+    </div>
+  </div>
 
   <div id="loading-overlay">
     <div class="loading-box">
@@ -132,8 +153,39 @@
         </section>
       </div>
 
-      <!-- MODUL 2: WILAYAH & OUTLET -->
+      <!-- MODUL 2: WILAYAH & OUTLET (DILENGKAPI EXECUTIVE SUMMARY KPI & HEATMAP) -->
       <div id="modul-wilayah" class="module-content-pane">
+        <!-- EXECUTIVE SUMMARY KPI & HEATMAP TOGGLE -->
+        <section class="section-card" style="background: linear-gradient(135deg, #0f291e 0%, #1b4332 100%); color: white; border: none;">
+          <h3 class="section-title" style="color: #a7f3d0; border-bottom: 1px solid rgba(255,255,255,0.15); padding-bottom: 6px;">
+            📊 Executive Summary KPI
+          </h3>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; font-size: 11px;">
+            <div style="background: rgba(255,255,255,0.08); padding: 8px; border-radius: 6px;">
+              <span style="color: #94a3b8; display: block;">Total Outlet</span>
+              <strong id="kpi-total-outlet" style="font-size: 14px; color: #ffffff;">0 Toko</strong>
+            </div>
+            <div style="background: rgba(255,255,255,0.08); padding: 8px; border-radius: 6px;">
+              <span style="color: #94a3b8; display: block;">Akumulasi Nilai</span>
+              <strong id="kpi-total-omset" style="font-size: 12px; color: #34d399;">Rp 0</strong>
+            </div>
+            <div style="background: rgba(255,255,255,0.08); padding: 8px; border-radius: 6px;">
+              <span style="color: #94a3b8; display: block;">Rata-rata / Toko</span>
+              <strong id="kpi-avg-outlet" style="font-size: 11px; color: #ffffff;">Rp 0</strong>
+            </div>
+            <div style="background: rgba(255,255,255,0.08); padding: 8px; border-radius: 6px;">
+              <span style="color: #94a3b8; display: block;">Kecamatan Top</span>
+              <strong id="kpi-top-kec" style="font-size: 11px; color: #fbbf24;" title="Kontributor Terbesar">-</strong>
+            </div>
+          </div>
+          
+          <div style="margin-top: 12px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.15); text-align: center;">
+            <button type="button" id="btn-toggle-heatmap" style="width: 100%; background: #059669; color: white; border: none; padding: 8px; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 11px; transition: background 0.2s;">
+              🔥 Aktifkan Mode Heatmap Peta
+            </button>
+          </div>
+        </section>
+
         <section class="section-card">
           <h3 class="section-title">
             <svg class="card-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
@@ -173,6 +225,15 @@
           <div class="form-group">
             <label for="select-jenis">Jenis Outlet</label>
             <select id="select-jenis" class="form-control" disabled><option value="">-- Semua Jenis --</option></select>
+          </div>
+
+          <!-- Quick Performance Filter (Top Tier vs Low Performer) -->
+          <div class="form-group" style="margin-top: 15px; border-top: 1px dashed #cbd5e1; padding-top: 12px;">
+            <label>Analisis Kinerja Toko:</label>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 6px;">
+              <button type="button" class="btn-preset btn-perf-filter" data-perf="top" style="background: #065f46; color: white; border: none; padding: 7px; border-radius: 4px; font-size: 11px; cursor: pointer; font-weight: 600;">🔥 Top Tier (A)</button>
+              <button type="button" class="btn-preset btn-perf-filter" data-perf="low" style="background: #991b1b; color: white; border: none; padding: 7px; border-radius: 4px; font-size: 11px; cursor: pointer; font-weight: 600;">⚠️ Low Performer</button>
+            </div>
           </div>
         </section>
       </div>
