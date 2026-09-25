@@ -1,5 +1,5 @@
 /* ==============================================================================
-   SpotRevenue Corporate Modern Style Sheet v1.5
+   SpotRevenue Corporate Modern Style Sheet v1.6
    Lead Developer: Urai Ikhsan Fadhilah
    ============================================================================== */
 
@@ -318,6 +318,9 @@ body, html {
   font-size: 0.74rem;
   color: var(--text-dark);
   font-weight: 600;
+  line-height: 1.2;
+  display: flex;
+  align-items: center;
 }
 
 .file-hidden {
@@ -333,6 +336,8 @@ body, html {
   border-radius: 5px;
   cursor: pointer;
   transition: background 0.2s ease;
+  min-width: 82px;
+  text-align: center;
 }
 
 .btn-sm-upload:hover {
@@ -359,6 +364,61 @@ body, html {
 
 .btn-reset-danger:hover {
   background: #dc2626;
+}
+
+/* ==============================================================================
+   FILTER BULAN PRESETS & MONTH PILLS (NEW IN v1.6)
+   ============================================================================== */
+.month-preset-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 3px;
+  margin-top: 4px;
+}
+
+.btn-preset {
+  background: var(--slate-bg);
+  border: 1px solid #cbd5e1;
+  color: var(--text-dark);
+  font-size: 0.62rem;
+  font-weight: 700;
+  padding: 5px 1px;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-preset:hover, .btn-preset.active {
+  background: var(--primary-emerald);
+  color: white;
+  border-color: var(--primary-emerald);
+}
+
+.month-pills-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.btn-month-pill {
+  background: var(--slate-bg);
+  border: 1px solid #cbd5e1;
+  color: var(--text-muted);
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 6px 2px;
+  border-radius: 5px;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.2s ease;
+}
+
+.btn-month-pill.active {
+  background: var(--accent-green);
+  color: var(--primary-dark);
+  border-color: var(--accent-green);
+  box-shadow: 0 1px 4px rgba(16, 185, 129, 0.35);
 }
 
 /* FORM CONTROL FILTER */
@@ -389,13 +449,22 @@ body, html {
   background: white;
 }
 
-/* DETAIL CARD & OMSET BOX */
+/* DETAIL CARD, OMSET BOX, AVERAGE BOX & SALESMAN */
 .info-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 6px;
   margin-top: 8px;
   font-size: 0.75rem;
+}
+
+.info-grid .grid-full {
+  grid-column: span 2;
+  background: #f1f5f9;
+  padding: 6px 8px;
+  border-radius: 5px;
+  border-left: 3px solid var(--primary-emerald);
+  margin-top: 2px;
 }
 
 .omset-box {
@@ -417,6 +486,39 @@ body, html {
   font-weight: 800;
   color: #ffffff;
   margin-top: 2px;
+}
+
+.omset-badge {
+  display: inline-block;
+  background: rgba(255, 255, 255, 0.18);
+  color: var(--accent-light);
+  font-size: 0.65rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 10px;
+  margin-top: 4px;
+}
+
+.avg-box {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin-top: 6px;
+  text-align: center;
+}
+
+.avg-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #166534;
+}
+
+.avg-val {
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: #15803d;
+  margin-top: 1px;
 }
 
 .brand-list {

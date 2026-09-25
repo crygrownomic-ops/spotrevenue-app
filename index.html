@@ -60,7 +60,7 @@
         Wilayah
       </button>
 
-      <button class="btn-module-nav" data-modul="modul-sales" title="Filter Sales Force">
+      <button class="btn-module-nav" data-modul="modul-sales" title="Filter Sales Force & Bulan">
         <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="7" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
         Sales
       </button>
@@ -121,7 +121,7 @@
           </div>
 
           <div class="upload-row">
-            <span class="lbl-upload">UOM (outlets_uom.json)</span>
+            <span class="lbl-upload">Uom (outlets_uom.json)</span>
             <input type="file" id="input-uom" accept=".json" class="file-hidden">
             <label for="input-uom" class="btn-sm-upload" id="label-uom">Upload UOM</label>
           </div>
@@ -177,12 +177,47 @@
         </section>
       </div>
 
-      <!-- MODUL 3: SALES FORCE -->
+      <!-- MODUL 3: SALES FORCE & BULAN -->
       <div id="modul-sales" class="module-content-pane">
+        <!-- FILTER PERIODE BULAN PENJUALAN -->
+        <section class="section-card">
+          <h3 class="section-title">
+            <svg class="card-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            Filter Periode Bulan (Omset & Average)
+          </h3>
+
+          <div class="form-group">
+            <label>Tombol Pintas Triwulan / Preset:</label>
+            <div class="month-preset-grid">
+              <button type="button" class="btn-preset active" data-preset="all">Semua (12B)</button>
+              <button type="button" class="btn-preset" data-preset="q1">Q1 (Jan-Mar)</button>
+              <button type="button" class="btn-preset" data-preset="q2">Q2 (Apr-Jun)</button>
+              <button type="button" class="btn-preset" data-preset="q3">Q3 (Jul-Sep)</button>
+              <button type="button" class="btn-preset" data-preset="q4">Q4 (Okt-Des)</button>
+            </div>
+
+            <label style="margin-top: 8px;">Pilih Bulan Transaksi:</label>
+            <div class="month-pills-grid">
+              <button type="button" class="btn-month-pill active" data-month="JAN">Jan</button>
+              <button type="button" class="btn-month-pill active" data-month="FEB">Feb</button>
+              <button type="button" class="btn-month-pill active" data-month="MAR">Mar</button>
+              <button type="button" class="btn-month-pill active" data-month="APR">Apr</button>
+              <button type="button" class="btn-month-pill active" data-month="MAY">Mei</button>
+              <button type="button" class="btn-month-pill active" data-month="JUN">Jun</button>
+              <button type="button" class="btn-month-pill active" data-month="JUL">Jul</button>
+              <button type="button" class="btn-month-pill active" data-month="AUG">Ags</button>
+              <button type="button" class="btn-month-pill active" data-month="SEP">Sep</button>
+              <button type="button" class="btn-month-pill active" data-month="OCT">Okt</button>
+              <button type="button" class="btn-month-pill active" data-month="NOV">Nov</button>
+              <button type="button" class="btn-month-pill active" data-month="DEC">Des</button>
+            </div>
+          </div>
+        </section>
+
         <section class="section-card">
           <h3 class="section-title">
             <svg class="card-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="16 11 18 13 22 9"/></svg>
-            Filter Tim Sales & Periode
+            Filter Tim Sales & Tahun
           </h3>
 
           <div class="form-group">
@@ -249,11 +284,20 @@
             <div><span>Kecamatan:</span> <strong id="outlet-kecamatan">-</strong></div>
             <div><span>Kelas:</span> <strong id="outlet-kelas">-</strong></div>
             <div><span>Tipe:</span> <strong id="outlet-tipe">-</strong></div>
+            <div class="grid-full"><span>Salesman:</span> <strong id="outlet-salesman">-</strong></div>
           </div>
 
+          <!-- KARTU TOTAL OMSET DENGAN STATUS BULAN TERPILIH -->
           <div class="omset-box">
-            <div class="omset-label" id="active-metric-label">Total Performance:</div>
+            <div class="omset-label" id="active-metric-label">Total Omset Bulan Terpilih:</div>
             <div id="outlet-omset" class="omset-val">0</div>
+            <div class="omset-badge" id="selected-months-badge">12 Bulan Aktif</div>
+          </div>
+
+          <!-- KARTU RATA-RATA OMSET PER BULAN -->
+          <div class="avg-box">
+            <div class="avg-label">Rata-Rata Omset / Bulan:</div>
+            <div id="outlet-avg-omset" class="avg-val">0</div>
           </div>
 
           <div style="margin-top: 10px;">
@@ -279,7 +323,7 @@
     </div>
 
     <footer class="sidebar-footer">
-      <div class="footer-system">SpotRevenue System v1.5</div>
+      <div class="footer-system">SpotRevenue System v1.6</div>
       <div class="footer-dev">Developer: <b>Urai Ikhsan Fadhilah</b></div>
     </footer>
   </aside>

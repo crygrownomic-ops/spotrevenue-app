@@ -1,5 +1,5 @@
 /* ==============================================================================
-   SpotRevenue Application Controller v1.5 (Module Nav & Full 13 Filters)
+   SpotRevenue Application Controller v1.6 (Month Filter, Average & Salesman Code)
    Lead Developer: Urai Ikhsan Fadhilah
    ============================================================================== */
 
@@ -59,9 +59,13 @@ const KODYA_MAP = {
   'KPH': 'KABUPATEN KAPUAS HULU'
 };
 
+const ALL_MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+let selectedMonths = [...ALL_MONTHS];
+
 let activeMetric = 'val';
 window.activeMetric = activeMetric;
 let activeOutletData = [];
+let selectedOutlet = null;
 
 function showLoading(text) {
   const overlay = document.getElementById('loading-overlay');
@@ -89,7 +93,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const btnPin = document.getElementById('btn-pin-sidebar');
   const btnReset = document.getElementById('btn-reset-db');
 
-  // SETUP SWAP MODUL TOMBOL NAVIGASI SIDEBAR
+  // SWAP MODUL NAVIGATION
   const moduleBtns = document.querySelectorAll('.btn-module-nav');
   const modulePanes = document.querySelectorAll('.module-content-pane');
 
@@ -149,12 +153,90 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupUploadListener('input-box', 'outlets_box', 'status-box', 'label-box', 'box');
   setupUploadListener('input-uom', 'outlets_uom', 'status-uom', 'label-uom', 'uom');
 
+  setupMonthFilterListeners();
   setupFilterListeners();
   initProvinsiDropdown();
   await updateAllMetricStatuses();
 
   await autoDetectAndLoadMetric();
 });
+
+// LOGIKA PILIHAN BULAN & PRESETS TRIWULAN
+function setupMonthFilterListeners() {
+  const monthPills = document.querySelectorAll('.btn-month-pill');
+  const presetBtns = document.querySelectorAll('.btn-preset');
+
+  monthPills.forEach(pill => {
+    pill.addEventListener('click', () => {
+      const m = pill.getAttribute('data-month');
+      if (selectedMonths.includes(m)) {
+        if (selectedMonths.length === 1) {
+          showToast('⚠️ Minimal harus ada 1 bulan terpilih!');
+          return;
+        }
+        selectedMonths = selectedMonths.filter(x => x !== m);
+        pill.classList.remove('active');
+      } else {
+        selectedMonths.push(m);
+        pill.classList.add('active');
+      }
+      
+      presetBtns.forEach(p => p.classList.remove('active'));
+      applyFilters();
+    });
+  });
+
+  presetBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const preset = btn.getAttribute('data-preset');
+      presetBtns.forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+
+      if (preset === 'all') {
+        selectedMonths = [...ALL_MONTHS];
+      } else if (preset === 'q1') {
+        selectedMonths = ['JAN', 'FEB', 'MAR'];
+      } else if (preset === 'q2') {
+        selectedMonths = ['APR', 'MAY', 'JUN'];
+      } else if (preset === 'q3') {
+        selectedMonths = ['JUL', 'AUG', 'SEP'];
+      } else if (preset === 'q4') {
+        selectedMonths = ['OCT', 'NOV', 'DEC'];
+      }
+
+      monthPills.forEach(pill => {
+        const m = pill.getAttribute('data-month');
+        if (selectedMonths.includes(m)) {
+          pill.classList.add('active');
+        } else {
+          pill.classList.remove('active');
+        }
+      });
+
+      applyFilters();
+    });
+  });
+}
+
+// FUNGSI KALKULASI REKALKULASI OMSET TERPILIH & AVERAGE
+function getOutletMetrics(outlet) {
+  if (!outlet.monthly_sales || selectedMonths.length === 0) {
+    const total = outlet.total_sales || 0;
+    return { total: total, avg: total };
+  }
+
+  let sum = 0;
+  selectedMonths.forEach(m => {
+    sum += (outlet.monthly_sales[m] || 0);
+  });
+
+  const avg = selectedMonths.length > 0 ? (sum / selectedMonths.length) : 0;
+  return { total: roundVal(sum), avg: roundVal(avg) };
+}
+
+function roundVal(val) {
+  return Math.round(val * 100) / 100;
+}
 
 async function switchActiveMetric(metric) {
   activeMetric = metric;
@@ -199,10 +281,7 @@ async function loadMetricDataToMap(metric) {
     const count = await window.db[storeName].count();
     if (count > 0) {
       activeOutletData = await window.db[storeName].toArray();
-      
-      // POPULATE SELURUH 13 DROPDOWN FILTER
       populateAllDropdowns();
-
       applyFilters();
     } else {
       activeOutletData = [];
@@ -295,7 +374,6 @@ function initProvinsiDropdown() {
   elProv.innerHTML = html;
 }
 
-// POPULATE SELURUH 13 FIELD DROPDOWN DARI DATASET
 function populateAllDropdowns() {
   populateGenericSelect('select-kabupaten', 'kodya', (val) => KODYA_MAP[val] ? `${KODYA_MAP[val]} (${val})` : val);
   populateGenericSelect('select-kecamatan', 'kecamatan');
@@ -370,7 +448,6 @@ function setupFilterListeners() {
   });
 }
 
-// LOGIKA FILTER MULTI-ATTRIBUT
 function applyFilters() {
   const getVal = (id) => {
     const el = document.getElementById(id);
@@ -395,7 +472,7 @@ function applyFilters() {
   const selectedSubbrandList = getVal('select-subbrand-list');
 
   const checkMatch = (item, fieldKey, targetVal) => {
-    if (!targetVal) return True;
+    if (!targetVal) return true;
     const val = item[fieldKey];
     if (Array.isArray(val)) {
       return val.includes(targetVal);
@@ -424,13 +501,24 @@ function applyFilters() {
     return true;
   });
 
+  // Hitung ulang omset berdasarkan bulan terpilih
+  filtered.forEach(item => {
+    const metrics = getOutletMetrics(item);
+    item.current_total = metrics.total;
+    item.current_avg = metrics.avg;
+  });
+
   if (typeof renderOutletMarkers === 'function') {
     renderOutletMarkers(filtered);
+  }
+
+  if (selectedOutlet) {
+    showOutletDetail(selectedOutlet);
   }
 }
 
 function showOutletDetail(outlet) {
-  // Otomatis Buka Modul Profil saat Toko Diklik
+  selectedOutlet = outlet;
   const btnDetail = document.querySelector('.btn-module-nav[data-modul="modul-detail"]');
   if (btnDetail) btnDetail.click();
 
@@ -438,6 +526,7 @@ function showOutletDetail(outlet) {
   if (!card) return;
 
   const custCode = outlet.customer_number || outlet.id || '-';
+  const metrics = getOutletMetrics(outlet);
 
   card.style.display = 'block';
   document.getElementById('outlet-nama').innerHTML = `
@@ -451,18 +540,32 @@ function showOutletDetail(outlet) {
   document.getElementById('outlet-kelas').innerText = Array.isArray(outlet.class) ? outlet.class.join(', ') : (outlet.class || '-');
   document.getElementById('outlet-tipe').innerText = Array.isArray(outlet.tipe) ? outlet.tipe.join(', ') : (outlet.tipe || '-');
 
+  // RENDERING KODE SALESMAN
+  const salesmanVal = Array.isArray(outlet.salespersons) && outlet.salespersons.length > 0 
+    ? outlet.salespersons.join(', ') 
+    : (outlet.salespersons || '-');
+  const elSalesman = document.getElementById('outlet-salesman');
+  if (elSalesman) elSalesman.innerText = salesmanVal;
+
   const labelEl = document.getElementById('active-metric-label');
   const valEl = document.getElementById('outlet-omset');
+  const badgeEl = document.getElementById('selected-months-badge');
+  const avgValEl = document.getElementById('outlet-avg-omset');
+
+  badgeEl.innerText = `${selectedMonths.length} Bulan Aktif (${selectedMonths.join(', ')})`;
 
   if (activeMetric === 'val') {
-    labelEl.innerText = 'Total Value Penjualan:';
-    valEl.innerText = `Rp ${outlet.total_sales.toLocaleString('id-ID')}`;
+    labelEl.innerText = 'Total Omset (Bulan Terpilih):';
+    valEl.innerText = `Rp ${metrics.total.toLocaleString('id-ID')}`;
+    avgValEl.innerText = `Rp ${metrics.avg.toLocaleString('id-ID')} / Bln`;
   } else if (activeMetric === 'box') {
-    labelEl.innerText = 'Total Volume (BOX):';
-    valEl.innerText = `${outlet.total_sales.toLocaleString('id-ID')} Karton`;
+    labelEl.innerText = 'Total Volume (Bulan Terpilih):';
+    valEl.innerText = `${metrics.total.toLocaleString('id-ID')} Karton`;
+    avgValEl.innerText = `${metrics.avg.toLocaleString('id-ID')} Karton / Bln`;
   } else {
-    labelEl.innerText = 'Total Kuantitas (UOM):';
-    valEl.innerText = `${outlet.total_sales.toLocaleString('id-ID')} Unit`;
+    labelEl.innerText = 'Total Kuantitas (Bulan Terpilih):';
+    valEl.innerText = `${metrics.total.toLocaleString('id-ID')} Unit`;
+    avgValEl.innerText = `${metrics.avg.toLocaleString('id-ID')} Unit / Bln`;
   }
 
   const brandListEl = document.getElementById('outlet-top-brands');
