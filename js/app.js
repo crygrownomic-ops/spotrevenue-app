@@ -1,4 +1,10 @@
-// Data 38 Provinsi Indonesia (Langsung siap pakai di memori lokal)
+/* ==============================================================================
+   SpotRevenue Application Controller (Multi-Metric Switcher & Hover Handling)
+   Lead Developer: Urai Ikhsan Fadhilah
+   ============================================================================== */
+
+const API_BASE = 'https://emsifa.github.io/api-wilayah-indonesia/api';
+
 const DEFAULT_PROVINSI = [
   { code: "11", name: "ACEH" },
   { code: "12", name: "SUMATERA UTARA" },
@@ -40,187 +46,231 @@ const DEFAULT_PROVINSI = [
   { code: "96", name: "PAPUA BARAT DAYA" }
 ];
 
-// Helper Loading & Toast
+let activeMetric = 'val'; // Default 'val', 'box', atau 'uom'
+let activeOutletData = [];
+
 function showLoading(text) {
-  document.getElementById('loading-msg').innerText = text;
-  document.getElementById('loading-overlay').style.display = 'flex';
+  const overlay = document.getElementById('loading-overlay');
+  const msg = document.getElementById('loading-msg');
+  if (msg) msg.innerText = text;
+  if (overlay) overlay.style.display = 'flex';
 }
 
 function hideLoading() {
-  document.getElementById('loading-overlay').style.display = 'none';
+  const overlay = document.getElementById('loading-overlay');
+  if (overlay) overlay.style.display = 'none';
 }
 
 function showToast(msg) {
   const toast = document.getElementById('toast');
+  if (!toast) return;
   toast.innerText = msg;
   toast.style.display = 'block';
   setTimeout(() => { toast.style.display = 'none'; }, 3000);
 }
 
-// DOM Elements
-const elProv = document.getElementById('select-provinsi');
-const elKab = document.getElementById('select-kabupaten');
-const elKec = document.getElementById('select-kecamatan');
-const elKel = document.getElementById('select-kelurahan');
+document.addEventListener('DOMContentLoaded', async () => {
+  const sidebar = document.getElementById('sidebar');
+  const triggerZone = document.getElementById('sidebar-trigger-zone');
+  const btnPin = document.getElementById('btn-pin-sidebar');
+  
+  // 1. AUTO-HOVER SLIDE IN / OUT SIDEBAR LOGIC
+  if (triggerZone) {
+    triggerZone.addEventListener('mouseenter', () => {
+      sidebar.classList.add('sidebar-expanded');
+    });
+  }
 
-// 1. Render Langsung Opsi Provinsi Ke Dropdown
-function loadProvinsi() {
-  elProv.innerHTML = '<option value="">-- Pilih Provinsi --</option>';
-  DEFAULT_PROVINSI.forEach(p => {
-    elProv.innerHTML += `<option value="${p.code}">${p.name}</option>`;
+  if (sidebar) {
+    sidebar.addEventListener('mouseleave', () => {
+      if (!sidebar.classList.contains('pinned')) {
+        sidebar.classList.remove('sidebar-expanded');
+      }
+    });
+  }
+
+  if (btnPin) {
+    btnPin.addEventListener('click', () => {
+      sidebar.classList.toggle('pinned');
+      btnPin.classList.toggle('active');
+      showToast(sidebar.classList.contains('pinned') ? '📌 Sidebar Dikunci' : '🔓 Sidebar Auto-Collapse');
+    });
+  }
+
+  // 2. SWITCHER METRIK AKTIF (VAL, BOX, UOM)
+  const metricButtons = document.querySelectorAll('.btn-metric');
+  metricButtons.forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const metric = btn.getAttribute('data-metric');
+      if (metric === activeMetric) return;
+
+      metricButtons.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      activeMetric = metric;
+
+      await loadMetricDataToMap(activeMetric);
+    });
   });
 
-  // Simpan ke IndexedDB di background agar terhubung dengan sistem lokal
-  db.provinsi.bulkPut(DEFAULT_PROVINSI).catch(err => console.log("Init DB:", err));
+  // 3. SETUP LISTENER UPLOAD METRIK DATASET
+  setupUploadListener('input-val', 'outlets_val', 'status-val', 'label-val', 'val');
+  setupUploadListener('input-box', 'outlets_box', 'status-box', 'label-box', 'box');
+  setupUploadListener('input-uom', 'outlets_uom', 'status-uom', 'label-uom', 'uom');
+
+  // 4. INISIALISASI
+  initProvinsiDropdown();
+  await updateAllMetricStatuses();
+  await loadMetricDataToMap(activeMetric);
+});
+
+// MEMUAT METRIK TERPILIH KE PETA
+async function loadMetricDataToMap(metric) {
+  const storeName = `outlets_${metric}`;
+  if (window.db && window.db[storeName]) {
+    const count = await window.db[storeName].count();
+    if (count > 0) {
+      activeOutletData = await window.db[storeName].toArray();
+      renderOutletMarkers(activeOutletData);
+      
+      const unitLabel = metric === 'val' ? 'Rp Value' : (metric === 'box' ? 'Karton Box' : 'Unit UOM');
+      showToast(`Menampilkan ${count.toLocaleString('id-ID')} outlet [${unitLabel}]`);
+    } else {
+      renderOutletMarkers([]);
+      showToast(`Belum ada data terimpor untuk metrik ${metric.toUpperCase()}`);
+    }
+  }
 }
 
-// 2. Event Handlers Cascading Dropdown (Kabupaten)
-elProv.addEventListener('change', async () => {
-  const provCode = elProv.value;
-  elKab.innerHTML = '<option value="">-- Pilih Kabupaten/Kota --</option>';
-  elKec.innerHTML = '<option value="">-- Pilih Kecamatan --</option>';
-  elKel.innerHTML = '<option value="">-- Pilih Kelurahan/Desa --</option>';
-  elKab.disabled = !provCode;
-  elKec.disabled = true;
-  elKel.disabled = true;
+// HANDLER PROSES IMPOR DATASET JSON
+function setupUploadListener(inputId, storeName, statusId, labelId, metricKey) {
+  const inputEl = document.getElementById(inputId);
+  if (!inputEl) return;
 
-  if (!provCode) return;
+  inputEl.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
 
-  let list = await db.kabupaten.where('province_code').equals(provCode).toArray();
-  if (list.length === 0) {
-    const provObj = DEFAULT_PROVINSI.find(p => p.code === provCode);
-    showLoading(`Mengunduh Kabupaten/Kota untuk ${provObj ? provObj.name : 'Provinsi'}...`);
-    try {
-      const res = await fetch(`${API_BASE}/regencies/${provCode}.json`);
-      const data = await res.json();
-      const formatted = data.map(item => ({ code: item.id, province_code: item.province_id, name: item.name }));
-      await db.kabupaten.bulkAdd(formatted);
-      list = formatted;
-      showToast(`Data Kabupaten/Kota disalin ke lokal!`);
-    } catch (err) {
-      alert("Gagal mengunduh data kabupaten. Periksa koneksi internet.");
-    } finally {
-      hideLoading();
-    }
-  }
+    showLoading(`Membaca file ${file.name}...`);
+    const reader = new FileReader();
 
-  list.sort((a,b) => a.name.localeCompare(b.name)).forEach(k => {
-    elKab.innerHTML += `<option value="${k.code}">${k.name}</option>`;
-  });
-});
-
-// 3. Event Handlers Cascading Dropdown (Kecamatan)
-elKab.addEventListener('change', async () => {
-  const kabCode = elKab.value;
-  elKec.innerHTML = '<option value="">-- Pilih Kecamatan --</option>';
-  elKel.innerHTML = '<option value="">-- Pilih Kelurahan/Desa --</option>';
-  elKec.disabled = !kabCode;
-  elKel.disabled = true;
-
-  if (!kabCode) return;
-
-  let list = await db.kecamatan.where('regency_code').equals(kabCode).toArray();
-  if (list.length === 0) {
-    const kabObj = await db.kabupaten.get(kabCode);
-    showLoading(`Mengunduh Kecamatan untuk ${kabObj ? kabObj.name : 'Kabupaten'}...`);
-    try {
-      const res = await fetch(`${API_BASE}/districts/${kabCode}.json`);
-      const data = await res.json();
-      const formatted = data.map(item => ({ code: item.id, regency_code: item.regency_id, name: item.name }));
-      await db.kecamatan.bulkAdd(formatted);
-      list = formatted;
-      showToast(`Data Kecamatan disalin ke lokal!`);
-    } catch (err) {
-      alert("Gagal mengunduh data kecamatan.");
-    } finally {
-      hideLoading();
-    }
-  }
-
-  list.sort((a,b) => a.name.localeCompare(b.name)).forEach(k => {
-    elKec.innerHTML += `<option value="${k.code}">${k.name}</option>`;
-  });
-});
-
-// 4. Event Handlers Cascading Dropdown (Kelurahan)
-elKec.addEventListener('change', async () => {
-  const kecCode = elKec.value;
-  elKel.innerHTML = '<option value="">-- Pilih Kelurahan/Desa --</option>';
-  elKel.disabled = !kecCode;
-
-  if (!kecCode) return;
-
-  let list = await db.kelurahan.where('district_code').equals(kecCode).toArray();
-  if (list.length === 0) {
-    const kecObj = await db.kecamatan.get(kecCode);
-    showLoading(`Mengunduh Kelurahan untuk ${kecObj ? kecObj.name : 'Kecamatan'}...`);
-    try {
-      const res = await fetch(`${API_BASE}/villages/${kecCode}.json`);
-      const data = await res.json();
-      const formatted = data.map(item => ({ code: item.id, district_code: item.district_id, name: item.name }));
-      await db.kelurahan.bulkAdd(formatted);
-      list = formatted;
-      showToast(`Data Kelurahan disalin ke lokal!`);
-    } catch (err) {
-      alert("Gagal mengunduh data kelurahan.");
-    } finally {
-      hideLoading();
-    }
-  }
-
-  list.sort((a,b) => a.name.localeCompare(b.name)).forEach(k => {
-    elKel.innerHTML += `<option value="${k.code}">${k.name}</option>`;
-  });
-});
-
-// 5. Pilih Kelurahan -> Gerakkan Peta ke Lokasi
-elKel.addEventListener('change', async () => {
-  const kelCode = elKel.value;
-  if (!kelCode) return;
-
-  const kelData = await db.kelurahan.get(kelCode);
-  const kecData = await db.kecamatan.get(elKec.value);
-  const kabData = await db.kabupaten.get(elKab.value);
-  const provObj = DEFAULT_PROVINSI.find(p => p.code === elProv.value);
-
-  if (kelData) {
-    document.getElementById('info-panel').style.display = 'block';
-    document.getElementById('info-nama').innerText = `${kelData.name}`;
-    document.getElementById('info-kode').innerHTML = `
-      <b>Kode Wilayah:</b> ${kelData.code}<br>
-      <b>Kecamatan:</b> ${kecData ? kecData.name : '-'}<br>
-      <b>Kab/Kota:</b> ${kabData ? kabData.name : '-'}<br>
-      <b>Provinsi:</b> ${provObj ? provObj.name : '-'}
-    `;
-
-    // Cari koordinat lokasi via OpenStreetMap Nominatim API
-    const searchQuery = `${kelData.name}, ${kecData ? kecData.name : ''}, ${kabData ? kabData.name : ''}, Indonesia`;
-    showLoading(`Mencari titik lokasi ${kelData.name}...`);
-
-    try {
-      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}`);
-      const results = await res.json();
-
-      if (results && results.length > 0) {
-        const top = results[0];
-        moveMapTo(top.lat, top.lon, 14, kelData.name, `${kecData ? kecData.name : ''}, ${kabData ? kabData.name : ''}`);
-        showToast(`Peta meluncur ke ${kelData.name}!`);
-      } else if (kecData) {
-        const fallbackQuery = `${kecData.name}, ${kabData ? kabData.name : ''}, Indonesia`;
-        const resFb = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(fallbackQuery)}`);
-        const resultsFb = await resFb.json();
-        if (resultsFb && resultsFb.length > 0) {
-          moveMapTo(resultsFb[0].lat, resultsFb[0].lon, 12, kecData.name, kabData ? kabData.name : '');
-          showToast(`Mengarahkan ke area ${kecData.name}`);
+    reader.onload = async (evt) => {
+      try {
+        const outlets = JSON.parse(evt.target.result);
+        if (!Array.isArray(outlets)) {
+          alert("Format file JSON tidak valid.");
+          hideLoading();
+          return;
         }
+
+        showLoading(`Menyimpan ${outlets.length.toLocaleString('id-ID')} outlet ke IndexedDB...`);
+
+        if (window.db && window.db[storeName]) {
+          await window.db[storeName].clear();
+          await window.db[storeName].bulkPut(outlets);
+        }
+
+        document.getElementById(statusId).innerText = `${outlets.length.toLocaleString('id-ID')} Outlet`;
+        document.getElementById(labelId).classList.add('loaded');
+        document.getElementById(labelId).innerText = '✅ Siap';
+
+        if (activeMetric === metricKey) {
+          await loadMetricDataToMap(metricKey);
+        }
+
+        hideLoading();
+        showToast(`✅ Berhasil memuat ${outlets.length.toLocaleString('id-ID')} outlet ${metricKey.toUpperCase()}!`);
+
+      } catch (err) {
+        alert("Gagal membaca file JSON: " + err.message);
+        hideLoading();
       }
-    } catch (err) {
-      console.error("Geocoding error:", err);
-    } finally {
-      hideLoading();
+    };
+
+    reader.readAsText(file);
+  });
+}
+
+// UPDATE STATUS JUMLAH OUTLET TERSEDIA DI BUTTON SWITCHER
+async function updateAllMetricStatuses() {
+  const metrics = ['val', 'box', 'uom'];
+  for (const m of metrics) {
+    const store = `outlets_${m}`;
+    const statusEl = document.getElementById(`status-${m}`);
+    const labelEl = document.getElementById(`label-${m}`);
+
+    if (window.db && window.db[store] && statusEl) {
+      const count = await window.db[store].count();
+      if (count > 0) {
+        statusEl.innerText = `${count.toLocaleString('id-ID')} Outlet`;
+        if (labelEl) {
+          labelEl.classList.add('loaded');
+          labelEl.innerText = '✅ Siap';
+        }
+      } else {
+        statusEl.innerText = 'Belum Ada';
+      }
     }
   }
-});
+}
 
-// Jalankan langsung saat script dibaca
-loadProvinsi();
+// INIT DROPDOWN PROVINSI
+function initProvinsiDropdown() {
+  const elProv = document.getElementById('select-provinsi');
+  if (!elProv) return;
+
+  let html = '<option value="">-- Pilih Provinsi --</option>';
+  DEFAULT_PROVINSI.forEach(p => {
+    html += `<option value="${p.code}">${p.name}</option>`;
+  });
+  elProv.innerHTML = html;
+}
+
+// PANEL DETAIL OUTLET TERPILIH
+function showOutletDetail(outlet) {
+  const card = document.getElementById('outlet-detail-card');
+  if (!card) return;
+
+  card.style.display = 'block';
+  document.getElementById('outlet-nama').innerHTML = `
+    <svg class="card-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7"/><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><path d="M15 22v-4a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v4"/><path d="M2 7h20"/><path d="M10 12h4"/></svg>
+    ${outlet.name}
+  `;
+  document.getElementById('outlet-id').innerText = `ID: ${outlet.id}`;
+  document.getElementById('outlet-alamat').innerText = outlet.address || 'Alamat tidak tersedia';
+  document.getElementById('outlet-kodya').innerText = outlet.kodya || '-';
+  document.getElementById('outlet-kecamatan').innerText = outlet.kecamatan || '-';
+  document.getElementById('outlet-kelas').innerText = outlet.class || '-';
+  document.getElementById('outlet-tipe').innerText = outlet.tipe || '-';
+
+  const labelEl = document.getElementById('active-metric-label');
+  const valEl = document.getElementById('outlet-omset');
+
+  if (activeMetric === 'val') {
+    labelEl.innerText = 'Total Value Penjualan:';
+    valEl.innerText = `Rp ${outlet.total_sales.toLocaleString('id-ID')}`;
+  } else if (activeMetric === 'box') {
+    labelEl.innerText = 'Total Volume (BOX):';
+    valEl.innerText = `${outlet.total_sales.toLocaleString('id-ID')} Karton`;
+  } else {
+    labelEl.innerText = 'Total Kuantitas (UOM):';
+    valEl.innerText = `${outlet.total_sales.toLocaleString('id-ID')} Unit`;
+  }
+
+  const brandListEl = document.getElementById('outlet-top-brands');
+  if (outlet.top_brands && outlet.top_brands.length > 0) {
+    let brandHtml = '';
+    outlet.top_brands.forEach(b => {
+      const valTxt = activeMetric === 'val' ? `Rp ${b.sales.toLocaleString('id-ID')}` : `${b.sales.toLocaleString('id-ID')}`;
+      brandHtml += `<li><b>${b.brand}</b>: ${valTxt}</li>`;
+    });
+    brandListEl.innerHTML = brandHtml;
+  } else {
+    brandListEl.innerHTML = '<li>Tidak ada data brand.</li>';
+  }
+}
+
+// UPDATE KOORDINAT DI PANEL
+function updateCoordDisplay(lat, lng) {
+  document.getElementById('val-lat').innerText = parseFloat(lat).toFixed(6);
+  document.getElementById('val-lng').innerText = parseFloat(lng).toFixed(6);
+}

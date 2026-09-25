@@ -1,11 +1,11 @@
-// Inisialisasi Database Dexie.js (IndexedDB)
-const db = new Dexie("PetaLokalkuFullDB");
+// Inisialisasi Database Dexie untuk PetaLokalku
+const db = new Dexie('PetaLokalkuDB');
 
 db.version(1).stores({
   provinsi: 'code, name',
   kabupaten: 'code, province_code, name',
   kecamatan: 'code, regency_code, name',
-  kelurahan: 'code, district_code, name'
+  outlets: 'id, name, kodya, kecamatan, class, total_sales, lat, lng'
 });
 
-const API_BASE = "https://www.emsifa.com/api-wilayah-indonesia/api";
+window.db = db;

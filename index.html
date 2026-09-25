@@ -3,86 +3,207 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>PetaLokalku - Pemetaan Wilayah & Pemantau Koordinat</title>
+  <meta name="author" content="Urai Ikhsan Fadhilah">
+  <title>SpotRevenue (SpotRev) - Enterprise Revenue & Volume Mapping</title>
 
-  <!-- External Libraries -->
+  <!-- Favicon SpotRevenue -->
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='48' fill='%23112a20'/><path d='M50 18 A 20 20 0 0 0 30 38 C 30 52 50 72 50 72 C 50 72 70 52 70 38 A 20 20 0 0 0 50 18 Z' fill='%2310b981'/><circle cx='50' cy='38' r='7' fill='%23112a20'/><rect x='25' y='75' width='12' height='10' fill='%23a7f3d0'/><rect x='44' y='67' width='12' height='18' fill='%23ffffff'/><rect x='63' y='59' width='12' height='26' fill='%2310b981'/></svg>">
+
+  <!-- Leaflet CSS & Dexie DB -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/dexie@3.2.4/dist/dexie.js"></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-  <!-- CSS Lokal -->
+  <!-- CSS Utama -->
   <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
 
-  <!-- POP-UP LOADING OVERLAY -->
+  <!-- LOADING OVERLAY -->
   <div id="loading-overlay">
     <div class="loading-box">
       <div class="spinner"></div>
-      <h4 style="margin-bottom: 6px; color: #1b4332;">Mengunduh Data</h4>
-      <p id="loading-msg" style="font-size: 0.8rem; color: #666;">Harap tunggu sebentar...</p>
+      <h4 id="loading-title">Memproses Metrik Data</h4>
+      <p id="loading-msg">Harap tunggu sebentar...</p>
     </div>
   </div>
 
-  <!-- NOTIFIKASI TOAST -->
-  <div id="toast">Data berhasil disimpan ke lokal!</div>
+  <!-- TOAST NOTIFIKASI -->
+  <div id="toast">Notifikasi Sistem</div>
 
-  <!-- SIDEBAR KONTROL -->
-  <div id="sidebar">
-    <div class="header">
-      <h1>PetaLokalku</h1>
-      <p>Pemetaan Wilayah & Pemantau Koordinat</p>
-      <span class="status-badge">● IndexedDB Active</span>
-    </div>
-
-    <div class="content">
-      <!-- Filter Wilayah -->
-      <div class="form-group">
-        <label for="select-provinsi">Provinsi (38 Provinsi)</label>
-        <select id="select-provinsi" class="form-control"><option value="">-- Pilih Provinsi --</option></select>
-      </div>
-
-      <div class="form-group">
-        <label for="select-kabupaten">Kabupaten / Kota</label>
-        <select id="select-kabupaten" class="form-control" disabled><option value="">-- Pilih Kabupaten/Kota --</option></select>
-      </div>
-
-      <div class="form-group">
-        <label for="select-kecamatan">Kecamatan</label>
-        <select id="select-kecamatan" class="form-control" disabled><option value="">-- Pilih Kecamatan --</option></select>
-      </div>
-
-      <div class="form-group">
-        <label for="select-kelurahan">Kelurahan / Desa</label>
-        <select id="select-kelurahan" class="form-control" disabled><option value="">-- Pilih Kelurahan/Desa --</option></select>
-      </div>
-
-      <!-- Detail Wilayah -->
-      <div id="info-panel" class="info-card" style="display: none;">
-        <h3 id="info-nama">Detail Wilayah</h3>
-        <p id="info-kode">Kode Wilayah: -</p>
-      </div>
-
-      <!-- Pemantau Titik Koordinat -->
-      <div class="coord-card">
-        <h3>📍 Pemantau Titik Koordinat</h3>
-        <p style="font-size: 0.75rem; color: #666; margin-bottom: 6px;">Klik pada titik mana saja di peta untuk merekam Latitude & Longitude.</p>
-        <div>
-          <span style="font-size: 0.75rem; color: #333;">Latitude (Lintang):</span>
-          <span id="val-lat" class="coord-val">-</span>
-        </div>
-        <div style="margin-top: 6px;">
-          <span style="font-size: 0.75rem; color: #333;">Longitude (Bujur):</span>
-          <span id="val-lng" class="coord-val">-</span>
-        </div>
-      </div>
-    </div>
+  <!-- INDIKATOR HOVER PEKA KURSOR (TRIGGER SIDEBAR) -->
+  <div id="sidebar-trigger-zone" title="Arahkan kursor ke sini untuk membuka menu">
+    <div class="trigger-bar"></div>
+    <span class="trigger-icon">
+      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+    </span>
   </div>
 
-  <!-- CONTAINER PETA -->
-  <div id="map"></div>
+  <!-- SIDEBAR MELAYANG AUTO-HOVER -->
+  <aside id="sidebar" class="sidebar-collapsed">
+    
+    <!-- HEADER SIDEBAR -->
+    <header class="header">
+      <div class="header-top">
+        <div class="brand-title">
+          <svg class="brand-logo" xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+          <h1>SpotRevenue</h1>
+        </div>
+        <button id="btn-pin-sidebar" class="btn-pin" title="Kunci Sidebar agar tetap terbuka">
+          <svg class="svg-icon" xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="17" x2="12" y2="22"/><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a3 3 0 0 0-6 0v3.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"/><circle cx="12" cy="4" r="2"/></svg>
+        </button>
+      </div>
+      <p class="tagline">Enterprise Location & Revenue Intelligence</p>
+    </header>
 
-  <!-- JavaScript Lokal (Modul Terpisah) -->
+    <div class="sidebar-scroll-content">
+
+      <!-- MODUL SWITCHER METRIK AKTIF -->
+      <section class="section-card metric-card">
+        <h3 class="section-title">
+          <svg class="card-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+          Metrik Tampilan Peta
+        </h3>
+        <div class="metric-switch-grid">
+          <button class="btn-metric active" data-metric="val">
+            <span class="btn-metric-title">
+              <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="2" x2="12" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+              VALUE
+            </span>
+            <small id="status-val">Belum Ada</small>
+          </button>
+
+          <button class="btn-metric" data-metric="box">
+            <span class="btn-metric-title">
+              <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>
+              BOX
+            </span>
+            <small id="status-box">Belum Ada</small>
+          </button>
+
+          <button class="btn-metric" data-metric="uom">
+            <span class="btn-metric-title">
+              <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.29 7 12 12 20.71 7"/><line x1="12" y1="22" x2="12" y2="12"/></svg>
+              UOM
+            </span>
+            <small id="status-uom">Belum Ada</small>
+          </button>
+        </div>
+      </section>
+
+      <!-- MODUL IMPOR 3 FILE METRIK -->
+      <section class="section-card upload-card">
+        <h3 class="section-title">
+          <svg class="card-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          Upload Master Dataset
+        </h3>
+        <p class="text-sub">Impor file JSON hasil ekstraksi converter:</p>
+
+        <!-- Upload VALUE -->
+        <div class="upload-row">
+          <span class="lbl-upload">Value (outlets_val.json)</span>
+          <input type="file" id="input-val" accept=".json" class="file-hidden">
+          <label for="input-val" class="btn-sm-upload" id="label-val">Upload VAL</label>
+        </div>
+
+        <!-- Upload BOX -->
+        <div class="upload-row">
+          <span class="lbl-upload">Box (outlets_box.json)</span>
+          <input type="file" id="input-box" accept=".json" class="file-hidden">
+          <label for="input-box" class="btn-sm-upload" id="label-box">Upload BOX</label>
+        </div>
+
+        <!-- Upload UOM -->
+        <div class="upload-row">
+          <span class="lbl-upload">UOM (outlets_uom.json)</span>
+          <input type="file" id="input-uom" accept=".json" class="file-hidden">
+          <label for="input-uom" class="btn-sm-upload" id="label-uom">Upload UOM</label>
+        </div>
+      </section>
+
+      <!-- FILTER WILAYAH -->
+      <section class="section-card">
+        <h3 class="section-title">
+          <svg class="card-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+          Filter Teritori Wilayah
+        </h3>
+        <div class="form-group">
+          <label for="select-provinsi">Provinsi</label>
+          <select id="select-provinsi" class="form-control">
+            <option value="">-- Pilih Provinsi --</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="select-kabupaten">Kabupaten / Kota</label>
+          <select id="select-kabupaten" class="form-control" disabled>
+            <option value="">-- Pilih Kabupaten/Kota --</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="select-kecamatan">Kecamatan</label>
+          <select id="select-kecamatan" class="form-control" disabled>
+            <option value="">-- Pilih Kecamatan --</option>
+          </select>
+        </div>
+      </section>
+
+      <!-- DETAIL OUTLET TERPILIH -->
+      <section id="outlet-detail-card" class="section-card detail-card" style="display: none;">
+        <h3 class="section-title" id="outlet-nama">
+          <svg class="card-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7"/><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><path d="M15 22v-4a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v4"/><path d="M2 7h20"/><path d="M10 12h4"/></svg>
+          Detail Profil Outlet
+        </h3>
+        <p id="outlet-id" class="text-sub">ID: -</p>
+        <p id="outlet-alamat" class="text-body" style="margin-top: 4px;"></p>
+        
+        <div class="info-grid">
+          <div><span>Kodya/Kab:</span> <strong id="outlet-kodya">-</strong></div>
+          <div><span>Kecamatan:</span> <strong id="outlet-kecamatan">-</strong></div>
+          <div><span>Kelas:</span> <strong id="outlet-kelas">-</strong></div>
+          <div><span>Tipe:</span> <strong id="outlet-tipe">-</strong></div>
+        </div>
+
+        <!-- DISPLAY METRIK RINGKASAN -->
+        <div class="omset-box">
+          <div class="omset-label" id="active-metric-label">Total Performance:</div>
+          <div id="outlet-omset" class="omset-val">0</div>
+        </div>
+
+        <div style="margin-top: 10px;">
+          <strong style="font-size: 0.78rem; color: #334155;">Top Brand (Metrik Aktif):</strong>
+          <ul id="outlet-top-brands" class="brand-list"></ul>
+        </div>
+      </section>
+
+      <!-- PEMANTAU KOORDINAT -->
+      <section class="section-card coord-card">
+        <h3 class="section-title">
+          <svg class="card-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="22" y1="12" x2="18" y2="12"/><line x1="6" y1="12" x2="2" y2="12"/><line x1="12" y1="6" x2="12" y2="2"/><line x1="12" y1="22" x2="12" y2="18"/></svg>
+          Pemantau Titik Koordinat
+        </h3>
+        <div class="coord-row">
+          <span>Latitude:</span> <strong id="val-lat" class="coord-val">-</strong>
+        </div>
+        <div class="coord-row" style="margin-top: 4px;">
+          <span>Longitude:</span> <strong id="val-lng" class="coord-val">-</strong>
+        </div>
+      </section>
+
+    </div>
+
+    <!-- FOOTER CREDIT KELAS ENTERPRISE -->
+    <footer class="sidebar-footer">
+      <div class="footer-system">SpotRevenue System v1.2</div>
+      <div class="footer-dev">Developer: <b>Urai Ikhsan Fadhilah</b></div>
+    </footer>
+  </aside>
+
+  <!-- CONTAINER PETA FULLSCREEN -->
+  <main id="map"></main>
+
+  <!-- Skrip Sistem -->
   <script src="js/db.js"></script>
   <script src="js/map.js"></script>
   <script src="js/app.js"></script>
