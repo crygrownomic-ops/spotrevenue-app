@@ -1,11 +1,14 @@
-// Inisialisasi Database Dexie untuk PetaLokalku
-const db = new Dexie('PetaLokalkuDB');
+/* ==============================================================================
+   SpotRevenue Dexie.js Database Engine (v3 Robust Scheme)
+   Developer: Urai Ikhsan Fadhilah
+   ============================================================================== */
 
-db.version(1).stores({
-  provinsi: 'code, name',
-  kabupaten: 'code, province_code, name',
-  kecamatan: 'code, regency_code, name',
-  outlets: 'id, name, kodya, kecamatan, class, total_sales, lat, lng'
+const db = new Dexie('SpotRevenueDB');
+
+db.version(3).stores({
+  outlets_val: 'id, name, kodya, kecamatan, class, total_sales, lat, lng',
+  outlets_box: 'id, name, kodya, kecamatan, class, total_sales, lat, lng',
+  outlets_uom: 'id, name, kodya, kecamatan, class, total_sales, lat, lng'
 });
 
 window.db = db;
