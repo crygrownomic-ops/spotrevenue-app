@@ -1,6 +1,7 @@
 // Inisialisasi Peta Leaflet
 const map = L.map('map').setView([-2.5489, 118.0149], 5);
 
+// Basemap OpenStreetMap
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   maxZoom: 18,
   attribution: '© OpenStreetMap | <b>PetaLokalku</b>'
@@ -8,19 +9,38 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
 
 let clickedMarker = null;
 
-// Event Klik Peta untuk Pemantau Koordinat Lat/Lng
-map.on('click', function(e) {
-  const lat = e.latlng.lat.toFixed(6);
-  const lng = e.latlng.lng.toFixed(6);
+// FUNGSI UTAMA: Menggerakkan peta ke koordinat lat & lng tertentu
+function moveMapTo(lat, lng, zoomLevel = 14, title = '', subtitle = '') {
+  const latitude = parseFloat(lat);
+  const longitude = parseFloat(lng);
 
-  document.getElementById('val-lat').innerText = lat;
-  document.getElementById('val-lng').innerText = lng;
+  // Efek animasi terbang ke lokasi
+  map.flyTo([latitude, longitude], zoomLevel);
 
+  // Buat atau pindahkan Marker
   if (clickedMarker) {
-    clickedMarker.setLatLng(e.latlng);
+    clickedMarker.setLatLng([latitude, longitude]);
   } else {
-    clickedMarker = L.marker(e.latlng).addTo(map);
+    clickedMarker = L.marker([latitude, longitude]).addTo(map);
   }
 
-  clickedMarker.bindPopup(`<b>Titik Terpilih</b><br>Lat: ${lat}<br>Lng: ${lng}`).openPopup();
+  // Tampilkan Pop-up
+  if (title) {
+    clickedMarker.bindPopup(`<b>${title}</b><br>${subtitle}`).openPopup();
+  }
+
+  // Perbarui Panel Pemantau Koordinat di Sidebar
+  document.getElementById('val-lat').innerText = latitude.toFixed(6);
+  document.getElementById('val-lng').innerText = longitude.toFixed(6);
+}
+
+// Event Klik Peta Manual
+map.on('click', function(e) {
+  moveMapTo(
+    e.latlng.lat, 
+    e.latlng.lng, 
+    map.getZoom(), 
+    'Titik Pilihan Manual', 
+    `Lat: ${e.latlng.lat.toFixed(6)} | Lng: ${e.latlng.lng.toFixed(6)}`
+  );
 });
