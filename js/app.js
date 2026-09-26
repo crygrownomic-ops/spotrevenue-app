@@ -1,5 +1,7 @@
 /* ==============================================================================
-   SpotRevenue Application Controller v1.7 (KPI Analytics, Heatmap & Performance Filter)
+   SpotRevenue Application Controller v2.1
+   Features: Precision FlyTo Search, Manual Spatial Click, Pulsing Red Beacons,
+             Excel Export for Anomaly Audits
    Lead Developer: Urai Ikhsan Fadhilah
    ============================================================================== */
 
@@ -59,6 +61,21 @@ const KODYA_MAP = {
   'KPH': 'KABUPATEN KAPUAS HULU'
 };
 
+const KODYA_CENTERS = {
+  'PTK': [-0.0263, 109.3425],
+  'SKW': [0.8917, 108.9858],
+  'KRY': [-0.1333, 109.3500],
+  'PNK': [0.3667, 108.9667],
+  'SBS': [1.3500, 109.3000],
+  'BKY': [0.8167, 108.9500],
+  'LDK': [0.4167, 109.9500],
+  'SGU': [0.1167, 110.5833],
+  'STG': [0.0667, 111.4833],
+  'MLW': [-0.3333, 111.7000],
+  'KTP': [-1.8333, 109.9667],
+  'KPH': [0.8833, 112.9333]
+};
+
 const ALL_MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
 let selectedMonths = [...ALL_MONTHS];
 
@@ -66,11 +83,18 @@ let activeMetric = 'val';
 window.activeMetric = activeMetric;
 let activeOutletData = [];
 let selectedOutlet = null;
-let activePerfFilter = null; // 'top', 'low', atau null
-let isHeatmapActive = false; // Status mode heatmap
+window.selectedOutlet = null;
 
-// --- SISTEM KEAMANAN & AKSES PIN GATE ---
-const CORRECT_PIN = "2026";
+let activePerfFilter = null;
+let isHeatmapActive = false;
+let dashBrandChart = null;
+let dashCalcMode = 'total';
+let currentBufferCircle = null;
+let lastAnomalyList = [];
+
+// --- SISTEM KEAMANAN & AKSES LOGIN PORTAL ---
+const VALID_USERS = ['admin', 'abah', 'urai', 'spotrevenue'];
+const VALID_PASSWORDS = ['spotrev2026', '2026'];
 
 function checkAppAuthentication() {
   const authModal = document.getElementById('auth-modal');
@@ -86,15 +110,25 @@ function checkAppAuthentication() {
 
 function setupAuthListeners() {
   const btnSubmit = document.getElementById('btn-submit-auth');
+  const inputUser = document.getElementById('auth-user-input');
   const inputPin = document.getElementById('auth-pin-input');
   const errorMsg = document.getElementById('auth-error-msg');
   const authModal = document.getElementById('auth-modal');
 
   const handleLogin = () => {
-    if (inputPin && inputPin.value === CORRECT_PIN) {
+    const userVal = inputUser ? inputUser.value.trim().toLowerCase() : '';
+    const passVal = inputPin ? inputPin.value.trim() : '';
+
+    const isUserValid = VALID_USERS.includes(userVal) || userVal === '';
+    const isPassValid = VALID_PASSWORDS.includes(passVal);
+
+    if ((isUserValid && isPassValid) || passVal === '2026' || passVal === 'spotrev2026') {
       sessionStorage.setItem('spotrevenue_auth', 'true');
       if (authModal) authModal.style.display = 'none';
       showToast('🔓 Akses Diberikan, Selamat Bekerja!');
+      if (typeof window.openFullDashboard === 'function') {
+        window.openFullDashboard();
+      }
     } else {
       if (errorMsg) errorMsg.style.display = 'block';
       if (inputPin) {
@@ -104,16 +138,17 @@ function setupAuthListeners() {
     }
   };
 
-  if (btnSubmit) {
-    btnSubmit.addEventListener('click', handleLogin);
-  }
+  if (btnSubmit) btnSubmit.addEventListener('click', handleLogin);
 
-  if (inputPin) {
-    inputPin.addEventListener('keypress', (e) => {
-      if (e.key === 'Enter') handleLogin();
-    });
-    setTimeout(() => inputPin.focus(), 100);
-  }
+  [inputUser, inputPin].forEach(input => {
+    if (input) {
+      input.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') handleLogin();
+      });
+    }
+  });
+
+  if (inputUser) setTimeout(() => inputUser.focus(), 100);
 }
 
 function showLoading(text) {
@@ -133,7 +168,19 @@ function showToast(msg) {
   if (!toast) return;
   toast.innerText = msg;
   toast.style.display = 'block';
-  setTimeout(() => { toast.style.display = 'none'; }, 3000);
+  setTimeout(() => { toast.style.display = 'none'; }, 3200);
+}
+
+// --- HELPER METRIK JARAK HAVERSINE (GEOSPATIAL) ---
+function getDistanceInMeters(lat1, lon1, lat2, lon2) {
+  const R = 6371000;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+            Math.sin(dLon/2) * Math.sin(dLon/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return R * c;
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -144,13 +191,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   const btnPin = document.getElementById('btn-pin-sidebar');
   const btnReset = document.getElementById('btn-reset-db');
 
-  // SWAP MODUL NAVIGATION
   const moduleBtns = document.querySelectorAll('.btn-module-nav');
   const modulePanes = document.querySelectorAll('.module-content-pane');
 
   moduleBtns.forEach(btn => {
     btn.addEventListener('click', () => {
       const targetModulId = btn.getAttribute('data-modul');
+      if (!targetModulId) return;
 
       moduleBtns.forEach(b => b.classList.remove('active'));
       modulePanes.forEach(p => p.classList.remove('active'));
@@ -192,7 +239,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
-  // Tombol Toggle Heatmap
   const btnToggleHeat = document.getElementById('btn-toggle-heatmap');
   if (btnToggleHeat) {
     btnToggleHeat.addEventListener('click', () => {
@@ -205,7 +251,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
-  // Tombol Quick Performance Filter (Top Tier vs Low Performer)
   const perfFilterBtns = document.querySelectorAll('.btn-perf-filter');
   perfFilterBtns.forEach(btn => {
     btn.addEventListener('click', () => {
@@ -230,6 +275,27 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   });
 
+  const radiusSelect = document.getElementById('select-buffer-radius');
+  if (radiusSelect) {
+    radiusSelect.addEventListener('change', updateBufferZoneAnalysis);
+  }
+
+  const btnCannibal = document.getElementById('btn-check-cannibalization');
+  if (btnCannibal) {
+    btnCannibal.addEventListener('click', checkCannibalizationRisk);
+  }
+
+  const btnAudit = document.getElementById('btn-run-anomaly-audit');
+  if (btnAudit) {
+    btnAudit.addEventListener('click', runCoordinateAnomalyAudit);
+  }
+
+  const btnExportExcel = document.getElementById('btn-export-anomaly-excel');
+  if (btnExportExcel) {
+    btnExportExcel.addEventListener('click', exportAnomalyToExcel);
+  }
+
+  setupGlobalSearchListeners();
   setupUploadListener('input-val', 'outlets_val', 'status-val', 'label-val', 'val');
   setupUploadListener('input-box', 'outlets_box', 'status-box', 'label-box', 'box');
   setupUploadListener('input-uom', 'outlets_uom', 'status-uom', 'label-uom', 'uom');
@@ -247,7 +313,98 @@ document.addEventListener('DOMContentLoaded', async () => {
   await autoDetectAndLoadMetric();
 });
 
-// LOGIKA PILIHAN BULAN & PRESETS TRIWULAN
+// --- PERBAIKAN PRESISI PENCARIAN GLOBAL & NAVIGASI PETA ---
+function setupGlobalSearchListeners() {
+  const searchInput = document.getElementById('global-search-input');
+  const suggestionsBox = document.getElementById('search-suggestions');
+  if (!searchInput || !suggestionsBox) return;
+
+  searchInput.addEventListener('input', (e) => {
+    const q = e.target.value.trim().toLowerCase();
+    if (!q || q.length < 2) {
+      suggestionsBox.style.display = 'none';
+      suggestionsBox.innerHTML = '';
+      return;
+    }
+
+    const source = (window.lastFilteredOutlets && window.lastFilteredOutlets.length > 0)
+                   ? window.lastFilteredOutlets
+                   : activeOutletData;
+
+    const matches = source.filter(o => {
+      const nameMatch = o.name && o.name.toLowerCase().includes(q);
+      const idMatch = (o.customer_number && String(o.customer_number).toLowerCase().includes(q)) ||
+                      (o.id && String(o.id).toLowerCase().includes(q));
+      return nameMatch || idMatch;
+    }).slice(0, 8);
+
+    if (matches.length === 0) {
+      suggestionsBox.innerHTML = `<div class="suggestion-item" style="color: #94a3b8; cursor: default;">Toko tidak ditemukan</div>`;
+      suggestionsBox.style.display = 'block';
+      return;
+    }
+
+    let html = '';
+    matches.forEach(o => {
+      const code = o.customer_number || o.id || '';
+      const kec = Array.isArray(o.kecamatan) ? o.kecamatan.join(', ') : (o.kecamatan || '-');
+      html += `
+        <div class="suggestion-item" data-id="${o.id || o.customer_number}">
+          <div style="font-weight: 600; color: #a7f3d0; font-size: 13px;">${o.name}</div>
+          <div style="font-size: 11px; color: #94a3b8;">Kode: ${code} | Kec: ${kec}</div>
+        </div>
+      `;
+    });
+
+    suggestionsBox.innerHTML = html;
+    suggestionsBox.style.display = 'block';
+
+    const items = suggestionsBox.querySelectorAll('.suggestion-item');
+    items.forEach(item => {
+      item.addEventListener('click', () => {
+        const outletId = item.getAttribute('data-id');
+        const target = source.find(o => String(o.id) === String(outletId) || String(o.customer_number) === String(outletId));
+        if (target) {
+          suggestionsBox.style.display = 'none';
+          searchInput.value = target.name;
+
+          // 1. TUTUP DASHBOARD FULLSCREEN JIKA SEDANG TERBUKA
+          if (typeof window.closeFullDashboard === 'function') {
+            window.closeFullDashboard();
+          }
+
+          // 2. TERBANG (FLY TO) & FOKUSKAN KAMERA PETA
+          const lat = parseFloat(target.lat ?? target.latitude);
+          const lng = parseFloat(target.lng ?? target.longitude);
+
+          if (!isNaN(lat) && !isNaN(lng) && window.map) {
+            window.map.flyTo([lat, lng], 17, { animate: true, duration: 1.5 });
+
+            // BUKA BALON POPUP MARKER TOKO
+            const searchKey1 = String(target.id);
+            const searchKey2 = String(target.customer_number);
+
+            if (window.outletMarkersMap && (window.outletMarkersMap.has(searchKey1) || window.outletMarkersMap.has(searchKey2))) {
+              const marker = window.outletMarkersMap.get(searchKey1) || window.outletMarkersMap.get(searchKey2);
+              if (marker) marker.openPopup();
+            }
+          }
+
+          // 3. ATUR DETAIL TOKO
+          showOutletDetail(target, true);
+          showToast(`📍 Menampilkan lokasi: ${target.name}`);
+        }
+      });
+    });
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!searchInput.contains(e.target) && !suggestionsBox.contains(e.target)) {
+      suggestionsBox.style.display = 'none';
+    }
+  });
+}
+
 function setupMonthFilterListeners() {
   const monthPills = document.querySelectorAll('.btn-month-pill');
   const presetBtns = document.querySelectorAll('.btn-preset');
@@ -255,20 +412,7 @@ function setupMonthFilterListeners() {
   monthPills.forEach(pill => {
     pill.addEventListener('click', () => {
       const m = pill.getAttribute('data-month');
-      if (selectedMonths.includes(m)) {
-        if (selectedMonths.length === 1) {
-          showToast('⚠️ Minimal harus ada 1 bulan terpilih!');
-          return;
-        }
-        selectedMonths = selectedMonths.filter(x => x !== m);
-        pill.classList.remove('active');
-      } else {
-        selectedMonths.push(m);
-        pill.classList.add('active');
-      }
-      
-      presetBtns.forEach(p => p.classList.remove('active'));
-      applyFilters();
+      toggleDashboardMonth(m);
     });
   });
 
@@ -290,17 +434,38 @@ function setupMonthFilterListeners() {
         selectedMonths = ['OCT', 'NOV', 'DEC'];
       }
 
-      monthPills.forEach(pill => {
-        const m = pill.getAttribute('data-month');
-        if (selectedMonths.includes(m)) {
-          pill.classList.add('active');
-        } else {
-          pill.classList.remove('active');
-        }
-      });
-
+      syncMonthPillUI();
       applyFilters();
     });
+  });
+}
+
+function toggleDashboardMonth(m) {
+  if (selectedMonths.includes(m)) {
+    if (selectedMonths.length === 1) {
+      showToast('⚠️ Minimal harus ada 1 bulan terpilih!');
+      return;
+    }
+    selectedMonths = selectedMonths.filter(x => x !== m);
+  } else {
+    selectedMonths.push(m);
+  }
+
+  syncMonthPillUI();
+  applyFilters();
+}
+
+function syncMonthPillUI() {
+  const monthPills = document.querySelectorAll('.btn-month-pill');
+  monthPills.forEach(pill => {
+    const m = pill.getAttribute('data-month');
+    pill.classList.toggle('active', selectedMonths.includes(m));
+  });
+
+  const dashMonthPills = document.querySelectorAll('.dash-month-pill');
+  dashMonthPills.forEach(pill => {
+    const m = pill.getAttribute('data-dash-month');
+    pill.classList.toggle('active', selectedMonths.includes(m));
   });
 }
 
@@ -323,17 +488,22 @@ function roundVal(val) {
   return Math.round(val * 100) / 100;
 }
 
+function setDashboardCalcMode(mode) {
+  dashCalcMode = mode;
+  updateDashboardAnalytics();
+  showToast(`📊 Mode Hitung: ${mode === 'total' ? 'TOTAL' : 'AVERAGE / BULAN'}`);
+}
+
+window.toggleDashboardMonth = toggleDashboardMonth;
+window.setDashboardCalcMode = setDashboardCalcMode;
+
 async function switchActiveMetric(metric) {
   activeMetric = metric;
   window.activeMetric = metric;
 
   const metricButtons = document.querySelectorAll('.btn-metric');
   metricButtons.forEach(b => {
-    if (b.getAttribute('data-metric') === metric) {
-      b.classList.add('active');
-    } else {
-      b.classList.remove('active');
-    }
+    b.classList.toggle('active', b.getAttribute('data-metric') === metric);
   });
 
   await loadMetricDataToMap(activeMetric);
@@ -419,10 +589,12 @@ async function loadMetricDataToMap(metric) {
       applyFilters();
     } else {
       activeOutletData = [];
+      window.lastFilteredOutlets = [];
       resetFilterDropdowns();
       if (typeof renderOutletMarkers === 'function') {
         renderOutletMarkers([]);
       }
+      updateDashboardAnalytics();
       showToast(`Belum ada data terimpor untuk metrik ${metric.toUpperCase()}`);
     }
   }
@@ -448,19 +620,19 @@ function setupUploadListener(inputId, storeName, statusId, labelId, metricKey) {
           return;
         }
 
-        showLoading(`Menyimpan ${outlets.length.toLocaleString('id-ID')} outlet ke IndexedDB...`);
+        showLoading(`Menyimpan ${outlets.length.toLocaleString('id-ID')} baris data ke IndexedDB...`);
 
         if (window.db && window.db[storeName]) {
           await window.db[storeName].clear();
           await window.db[storeName].bulkPut(outlets);
         }
 
-        document.getElementById(statusId).innerText = `${outlets.length.toLocaleString('id-ID')} Outlet`;
+        document.getElementById(statusId).innerText = `${outlets.length.toLocaleString('id-ID')} Baris Data`;
         document.getElementById(labelId).classList.add('loaded');
         document.getElementById(labelId).innerText = '✅ Siap';
 
         hideLoading();
-        showToast(`✅ Berhasil memuat ${outlets.length.toLocaleString('id-ID')} outlet ${metricKey.toUpperCase()}!`);
+        showToast(`✅ Berhasil memuat ${outlets.length.toLocaleString('id-ID')} baris data ${metricKey.toUpperCase()}!`);
 
         await switchActiveMetric(metricKey);
 
@@ -484,7 +656,7 @@ async function updateAllMetricStatuses() {
     if (window.db && window.db[store] && statusEl) {
       const count = await window.db[store].count();
       if (count > 0) {
-        statusEl.innerText = `${count.toLocaleString('id-ID')} Outlet`;
+        statusEl.innerText = `${count.toLocaleString('id-ID')} Baris Data`;
         if (labelEl) {
           labelEl.classList.add('loaded');
           labelEl.innerText = '✅ Siap';
@@ -519,7 +691,7 @@ function populateAllDropdowns() {
   populateGenericSelect('select-divisi-sales', 'divisi_sales');
   populateGenericSelect('select-category-sales', 'category_sales');
   populateGenericSelect('select-salesperson', 'salespersons');
-  populateGenericSelect('select-tahun', 'tahun');
+  populateGenericSelect('select-tahun', 'tahun', null, 'dash-select-tahun');
 
   populateGenericSelect('select-grup', 'groups');
   populateGenericSelect('select-brand', 'brands');
@@ -527,7 +699,7 @@ function populateAllDropdowns() {
   populateGenericSelect('select-subbrand-list', 'subbrand_lists');
 }
 
-function populateGenericSelect(elementId, fieldKey, formatterFn) {
+function populateGenericSelect(elementId, fieldKey, formatterFn, secondaryElementId = null) {
   const el = document.getElementById(elementId);
   if (!el) return;
 
@@ -550,6 +722,14 @@ function populateGenericSelect(elementId, fieldKey, formatterFn) {
 
   el.innerHTML = html;
   el.disabled = false;
+
+  if (secondaryElementId) {
+    const secEl = document.getElementById(secondaryElementId);
+    if (secEl) {
+      secEl.innerHTML = html;
+      secEl.disabled = false;
+    }
+  }
 }
 
 function resetFilterDropdowns() {
@@ -565,6 +745,11 @@ function resetFilterDropdowns() {
       el.disabled = true;
     }
   });
+
+  const dashTahun = document.getElementById('dash-select-tahun');
+  if (dashTahun) {
+    dashTahun.innerHTML = `<option value="">-- Semua Tahun --</option>`;
+  }
 }
 
 function setupFilterListeners() {
@@ -583,6 +768,10 @@ function setupFilterListeners() {
           if (typeof loadProvinceBoundary === 'function') {
             loadProvinceBoundary(provCode);
           }
+        }
+        if (id === 'select-tahun') {
+          const dashTahun = document.getElementById('dash-select-tahun');
+          if (dashTahun) dashTahun.value = e.target.value;
         }
         applyFilters();
       });
@@ -643,18 +832,15 @@ function applyFilters() {
     return true;
   });
 
-  // Hitung ulang omset berdasarkan bulan terpilih
   filtered.forEach(item => {
     const metrics = getOutletMetrics(item);
     item.current_total = metrics.total;
     item.current_avg = metrics.avg;
   });
 
-  // Terapkan Quick Performance Filter (Top Tier vs Low Performer) jika aktif
   if (activePerfFilter && filtered.length > 0) {
-    // Urutkan berdasarkan total tertinggi ke terendah
     const sortedCopy = [...filtered].sort((a, b) => b.current_total - a.current_total);
-    const thresholdIndex = Math.ceil(sortedCopy.length * 0.25); // Ambil kuartil atas (Top 25%)
+    const thresholdIndex = Math.ceil(sortedCopy.length * 0.25);
 
     if (activePerfFilter === 'top') {
       const topIds = new Set(sortedCopy.slice(0, thresholdIndex).map(o => o.customer_number || o.id));
@@ -665,7 +851,8 @@ function applyFilters() {
     }
   }
 
-  // --- KALKULASI EXECUTIVE SUMMARY KPI ---
+  window.lastFilteredOutlets = filtered;
+
   let totalOmsetAll = 0;
   const kecMapCount = {};
 
@@ -687,7 +874,6 @@ function applyFilters() {
   const avgPerOutlet = filtered.length > 0 ? (totalOmsetAll / filtered.length) : 0;
   const metricLabel = activeMetric.toUpperCase();
 
-  // Update DOM KPI Bar
   const elKpiOutlet = document.getElementById('kpi-total-outlet');
   const elKpiOmset = document.getElementById('kpi-total-omset');
   const elKpiAvg = document.getElementById('kpi-avg-outlet');
@@ -698,7 +884,6 @@ function applyFilters() {
   if (elKpiAvg) elKpiAvg.innerText = activeMetric === 'val' ? `Rp ${Math.round(avgPerOutlet).toLocaleString('id-ID')}` : `${Math.round(avgPerOutlet).toLocaleString('id-ID')} ${metricLabel}`;
   if (elKpiKec) elKpiKec.innerText = topKecName;
 
-  // Render Peta (Marker atau Heatmap)
   if (isHeatmapActive && typeof renderHeatmapLayer === 'function') {
     renderHeatmapLayer(filtered);
   } else if (typeof renderOutletMarkers === 'function') {
@@ -711,10 +896,479 @@ function applyFilters() {
       showOutletDetail(updatedOutlet, false);
     }
   }
+
+  updateDashboardAnalytics();
+}
+
+function updateDashboardAnalytics() {
+  const dataset = (window.lastFilteredOutlets && window.lastFilteredOutlets.length > 0) 
+                  ? window.lastFilteredOutlets 
+                  : activeOutletData;
+
+  const currentMetric = window.activeMetric || 'val';
+  const metricUpper = currentMetric.toUpperCase();
+  const numMonths = selectedMonths.length || 1;
+
+  let totalOmset = 0;
+  const kecMap = {};
+  const brandMap = {};
+  const salesMap = {};
+
+  dataset.forEach(item => {
+    const itemVal = item.current_total || item.total_sales || 0;
+    totalOmset += itemVal;
+
+    const kec = Array.isArray(item.kecamatan) ? item.kecamatan[0] : (item.kecamatan || 'Lainnya');
+    if (kec) kecMap[kec] = (kecMap[kec] || 0) + itemVal;
+
+    if (item.top_brands && Array.isArray(item.top_brands)) {
+      item.top_brands.forEach(tb => {
+        if (tb.brand) brandMap[tb.brand] = (brandMap[tb.brand] || 0) + (tb.sales || 0);
+      });
+    }
+
+    const salesArr = Array.isArray(item.salespersons) ? item.salespersons : (item.salespersons ? [item.salespersons] : []);
+    salesArr.forEach(sp => {
+      if (sp) salesMap[sp] = (salesMap[sp] || 0) + itemVal;
+    });
+  });
+
+  if (dashCalcMode === 'avg') {
+    totalOmset = totalOmset / numMonths;
+
+    Object.keys(kecMap).forEach(k => kecMap[k] = kecMap[k] / numMonths);
+    Object.keys(brandMap).forEach(b => brandMap[b] = brandMap[b] / numMonths);
+    Object.keys(salesMap).forEach(s => salesMap[s] = salesMap[s] / numMonths);
+  }
+
+  const totalOutlet = dataset.length;
+  const avgPerOutlet = totalOutlet > 0 ? (totalOmset / totalOutlet) : 0;
+
+  const formatVal = (num) => {
+    const formatted = Math.round(num).toLocaleString('id-ID');
+    if (currentMetric === 'val') {
+      return `Rp ${formatted}`;
+    } else if (currentMetric === 'box') {
+      return `${formatted} BOX`;
+    } else {
+      return `${formatted} UOM`;
+    }
+  };
+
+  let topKec = '-';
+  let maxKecVal = -1;
+  Object.keys(kecMap).forEach(k => {
+    if (kecMap[k] > maxKecVal) {
+      maxKecVal = kecMap[k];
+      topKec = k;
+    }
+  });
+
+  const elOutlet = document.getElementById('full-kpi-outlet');
+  const elOmset = document.getElementById('full-kpi-omset');
+  const elSubOmset = document.getElementById('sub-full-kpi-omset');
+  const elAvg = document.getElementById('full-kpi-avg');
+  const elTopKec = document.getElementById('full-kpi-top-kec');
+  const elLabelOmset = document.getElementById('label-full-kpi-omset');
+  const elChartBadge = document.getElementById('chart-metric-badge');
+
+  if (elOutlet) elOutlet.innerText = `${totalOutlet.toLocaleString('id-ID')} Toko`;
+  if (elOmset) elOmset.innerText = formatVal(totalOmset);
+  if (elAvg) elAvg.innerText = formatVal(avgPerOutlet);
+  if (elTopKec) elTopKec.innerText = topKec;
+
+  if (elLabelOmset) {
+    elLabelOmset.innerText = dashCalcMode === 'avg' ? `Akumulasi AVERAGE (${metricUpper})` : `Akumulasi TOTAL (${metricUpper})`;
+  }
+  if (elSubOmset) {
+    elSubOmset.innerText = dashCalcMode === 'avg' ? `Rata-rata dihitung dari ${numMonths} bulan terpilih` : `Total akumulasi ${numMonths} bulan terpilih`;
+  }
+  if (elChartBadge) {
+    elChartBadge.innerText = `Metrik: ${metricUpper} | Mode: ${dashCalcMode === 'avg' ? 'AVERAGE' : 'TOTAL'}`;
+  }
+
+  renderRankList('full-rank-brands', brandMap, formatVal);
+  renderRankList('full-rank-kecamatan', kecMap, formatVal);
+  renderRankList('full-rank-sales', salesMap, formatVal);
+
+  renderBrandChart(brandMap, metricUpper);
+}
+
+function renderRankList(containerId, dataMap, formatFn) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+
+  const sortedKeys = Object.keys(dataMap).sort((a, b) => dataMap[b] - dataMap[a]).slice(0, 5);
+
+  if (sortedKeys.length === 0) {
+    container.innerHTML = `<div style="color: #64748b; font-size: 12px; padding: 10px 0;">Belum ada data transaksi</div>`;
+    return;
+  }
+
+  let html = '';
+  sortedKeys.forEach((key, idx) => {
+    const valStr = formatFn(dataMap[key]);
+    html += `
+      <div class="rank-list-item">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="background: rgba(16,185,129,0.15); width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: #a7f3d0;">${idx + 1}</span>
+          <span style="font-weight: 600; color: #e2e8f0;">${key}</span>
+        </div>
+        <strong style="color: #34d399; font-size: 12px;">${valStr}</strong>
+      </div>
+    `;
+  });
+
+  container.innerHTML = html;
+}
+
+function renderBrandChart(brandMap, metricLabel) {
+  const ctx = document.getElementById('chart-top-brands');
+  if (!ctx || typeof Chart === 'undefined') return;
+
+  const sortedBrands = Object.keys(brandMap).sort((a, b) => brandMap[b] - brandMap[a]).slice(0, 7);
+  const labels = sortedBrands;
+  const values = sortedBrands.map(b => brandMap[b]);
+
+  if (dashBrandChart) {
+    dashBrandChart.destroy();
+  }
+
+  dashBrandChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: labels.length > 0 ? labels : ['Belum Ada Data'],
+      datasets: [{
+        label: `Penjualan (${metricLabel})`,
+        data: values.length > 0 ? values : [0],
+        backgroundColor: 'rgba(16, 185, 129, 0.75)',
+        borderColor: '#10b981',
+        borderWidth: 1.5,
+        borderRadius: 6
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false }
+      },
+      scales: {
+        x: {
+          ticks: { color: '#94a3b8', font: { size: 11 } },
+          grid: { display: false }
+        },
+        y: {
+          ticks: { color: '#94a3b8', font: { size: 11 } },
+          grid: { color: 'rgba(255,255,255,0.06)' }
+        }
+      }
+    }
+  });
+}
+
+window.updateDashboardAnalytics = updateDashboardAnalytics;
+
+// --- ANALISIS SPASIAL: ZONA CAKUPAN PASAR (CATCHMENT RADIUS) ---
+function updateBufferZoneAnalysis() {
+  const radiusSelect = document.getElementById('select-buffer-radius');
+  const resultEl = document.getElementById('buffer-analysis-result');
+  const spasialTitleEl = document.getElementById('spasial-selected-outlet-name');
+
+  if (!selectedOutlet) {
+    if (spasialTitleEl) spasialTitleEl.innerText = "Belum ada toko terpilih. Klik salah satu titik toko pada peta!";
+    if (resultEl) {
+      resultEl.style.background = '#f8fafc';
+      resultEl.style.border = '1px solid #cbd5e1';
+      resultEl.style.color = '#1e293b';
+      resultEl.innerHTML = "💡 <b>Petunjuk:</b> Klik salah satu toko pada peta, lalu tentukan radius untuk menampilkan area jangkauan pada peta secara visual.";
+    }
+    if (currentBufferCircle && window.map) {
+      window.map.removeLayer(currentBufferCircle);
+      currentBufferCircle = null;
+    }
+    return;
+  }
+
+  if (spasialTitleEl) spasialTitleEl.innerText = `🏪 ${selectedOutlet.name}`;
+
+  const lat = parseFloat(selectedOutlet.lat ?? selectedOutlet.latitude);
+  const lng = parseFloat(selectedOutlet.lng ?? selectedOutlet.longitude);
+  const radius = parseInt(radiusSelect ? radiusSelect.value : "0") || 0;
+
+  if (currentBufferCircle && window.map) {
+    window.map.removeLayer(currentBufferCircle);
+    currentBufferCircle = null;
+  }
+
+  if (radius <= 0) {
+    if (resultEl) {
+      resultEl.style.background = '#f8fafc';
+      resultEl.style.border = '1px solid #cbd5e1';
+      resultEl.style.color = '#475569';
+      resultEl.innerHTML = "Lingkaran radius dinonaktifkan.";
+    }
+    return;
+  }
+
+  if (isNaN(lat) || isNaN(lng) || (lat === 0 && lng === 0)) {
+    if (resultEl) {
+      resultEl.style.background = '#fef2f2';
+      resultEl.style.border = '1px solid #fca5a5';
+      resultEl.style.color = '#991b1b';
+      resultEl.innerHTML = "⚠️ Koordinat toko ini tidak valid atau belum terdaftar.";
+    }
+    return;
+  }
+
+  if (window.map && typeof L !== 'undefined') {
+    currentBufferCircle = L.circle([lat, lng], {
+      radius: radius,
+      color: '#059669',
+      fillColor: '#10b981',
+      fillOpacity: 0.2,
+      weight: 2,
+      dashArray: '6, 6'
+    }).addTo(window.map);
+
+    window.map.flyTo([lat, lng], radius >= 3000 ? 13 : 15, { animate: true, duration: 1 });
+  }
+
+  const filtered = window.lastFilteredOutlets || activeOutletData;
+  let count = 0;
+  filtered.forEach(o => {
+    const oLat = parseFloat(o.lat ?? o.latitude);
+    const oLng = parseFloat(o.lng ?? o.longitude);
+    if ((o.id !== selectedOutlet.id && o.customer_number !== selectedOutlet.customer_number) && !isNaN(oLat) && !isNaN(oLng)) {
+      const dist = getDistanceInMeters(lat, lng, oLat, oLng);
+      if (dist <= radius) count++;
+    }
+  });
+
+  if (resultEl) {
+    const radKm = radius >= 1000 ? `${radius/1000} km` : `${radius} meter`;
+    resultEl.style.background = '#f0fdf4';
+    resultEl.style.border = '1px solid #86efac';
+    resultEl.style.color = '#166534';
+    resultEl.innerHTML = `📍 Terdeteksi <b>${count} toko lain</b> dalam radius <b>${radKm}</b> di sekitar <b>${selectedOutlet.name}</b>. Lingkaran hijau ditampilkan di peta.`;
+  }
+}
+
+// --- EVALUASI TUMPANG TINDIH WILAYAH (< 500m) ---
+function checkCannibalizationRisk() {
+  if (!selectedOutlet) {
+    showToast("⚠️ Silakan klik toko pada peta terlebih dahulu!");
+    return;
+  }
+
+  const lat = parseFloat(selectedOutlet.lat ?? selectedOutlet.latitude);
+  const lng = parseFloat(selectedOutlet.lng ?? selectedOutlet.longitude);
+
+  if (isNaN(lat) || isNaN(lng) || (lat === 0 && lng === 0)) {
+    showToast("⚠️ Koordinat toko tidak valid!");
+    return;
+  }
+
+  const filtered = window.lastFilteredOutlets || activeOutletData;
+  const nearbyOutlets = [];
+
+  filtered.forEach(o => {
+    const oLat = parseFloat(o.lat ?? o.latitude);
+    const oLng = parseFloat(o.lng ?? o.longitude);
+    if ((o.id !== selectedOutlet.id && o.customer_number !== selectedOutlet.customer_number) && !isNaN(oLat) && !isNaN(oLng)) {
+      const dist = getDistanceInMeters(lat, lng, oLat, oLng);
+      if (dist <= 500) {
+        nearbyOutlets.push({ name: o.name, distance: Math.round(dist) });
+      }
+    }
+  });
+
+  if (currentBufferCircle && window.map) {
+    window.map.removeLayer(currentBufferCircle);
+  }
+  if (window.map && typeof L !== 'undefined') {
+    currentBufferCircle = L.circle([lat, lng], {
+      radius: 500,
+      color: '#dc2626',
+      fillColor: '#ef4444',
+      fillOpacity: 0.25,
+      weight: 2.5,
+      dashArray: '4, 4'
+    }).addTo(window.map);
+
+    window.map.flyTo([lat, lng], 16, { animate: true, duration: 1 });
+  }
+
+  const resultEl = document.getElementById('buffer-analysis-result');
+  if (nearbyOutlets.length > 0) {
+    if (resultEl) {
+      resultEl.style.background = '#fffbe2';
+      resultEl.style.border = '1px solid #fde047';
+      resultEl.style.color = '#854d0e';
+      resultEl.innerHTML = `⚠️ <b>Tumpang Tindih Wilayah Terdeteksi!</b><br>Terdapat <b>${nearbyOutlets.length} toko berdekatan</b> dalam radius < 500m dari <b>${selectedOutlet.name}</b>. Lingkaran merah ditampilkan di peta.`;
+    }
+    showToast(`⚠️ Terdeteksi ${nearbyOutlets.length} toko berdekatan (< 500m)!`);
+  } else {
+    if (resultEl) {
+      resultEl.style.background = '#f0fdf4';
+      resultEl.style.border = '1px solid #86efac';
+      resultEl.style.color = '#166534';
+      resultEl.innerHTML = `✅ <b>Penyebaran Wilayah Ideal</b><br>Tidak ada toko lain dalam radius < 500m dari <b>${selectedOutlet.name}</b>.`;
+    }
+    showToast("✅ Lokasi toko ideal, tidak ada tumpang tindih (<500m)!");
+  }
+}
+
+// --- ALGORITMA AUDIT ANOMALI KOORDINAT OUTLET + SINAR MERAH MENYALA ---
+function runCoordinateAnomalyAudit() {
+  const resultContainer = document.getElementById('anomaly-audit-results');
+  const btnExport = document.getElementById('btn-export-anomaly-excel');
+  if (!resultContainer) return;
+
+  showToast("🔍 Menganalisis anomali geospasial seluruh toko...");
+
+  const sourceData = activeOutletData;
+  if (!sourceData || sourceData.length === 0) {
+    resultContainer.innerHTML = `<div style="color: #64748b; font-size: 12px; padding: 10px;">Belum ada data toko terimpor.</div>`;
+    if (btnExport) btnExport.style.display = 'none';
+    return;
+  }
+
+  const anomalyList = [];
+
+  sourceData.forEach(o => {
+    const lat = parseFloat(o.lat ?? o.latitude);
+    const lng = parseFloat(o.lng ?? o.longitude);
+    const kodyaKey = o.kodya || '';
+
+    // RULE 1: KOORDINAT KOSONG ATAU NOL (0,0)
+    if (isNaN(lat) || isNaN(lng) || (lat === 0 && lng === 0)) {
+      anomalyList.push({ outlet: o, reason: "Koordinat Kosong / Nol (0,0)" });
+      return;
+    }
+
+    // RULE 2: DI LUAR BATAS WILAYAH INDONESIA (Lat: -11 s/d 6, Lng: 95 s/d 141)
+    if (lat < -11.0 || lat > 6.0 || lng < 95.0 || lng > 141.0) {
+      anomalyList.push({ outlet: o, reason: `Di luar wilayah Indonesia (${lat.toFixed(4)}, ${lng.toFixed(4)})` });
+      return;
+    }
+
+    // RULE 3: TERDETEKSI DI LAUTAN PESISIR KALBAR (Pesisir Pontianak / Laut Natuna / Selat Karimata)
+    if (lng < 108.8 || (lng < 109.2 && lat > -0.2 && lat < 0.2)) {
+      anomalyList.push({ outlet: o, reason: `Terdeteksi di area Lautan/Lepas Pantai (${lat.toFixed(4)}, ${lng.toFixed(4)})` });
+      return;
+    }
+
+    // RULE 4: DEVIASI JARAK EXTREME (> 75 km) DARI PUSAT KABUPATEN/KOTA TERDAFTAR
+    if (kodyaKey && KODYA_CENTERS[kodyaKey]) {
+      const center = KODYA_CENTERS[kodyaKey];
+      const distKm = getDistanceInMeters(lat, lng, center[0], center[1]) / 1000;
+      if (distKm > 75) {
+        anomalyList.push({ outlet: o, reason: `Penyimpangan Jarak (${Math.round(distKm)} km dari ${KODYA_MAP[kodyaKey] || kodyaKey})` });
+        return;
+      }
+    }
+  });
+
+  lastAnomalyList = anomalyList;
+
+  // TAMPILKAN SINAR MERAH MENYALA (PULSING BEACON) DI PETA SEMENTARA AUDIT
+  if (typeof window.highlightAnomalyMarkers === 'function') {
+    window.highlightAnomalyMarkers(anomalyList);
+  }
+
+  if (anomalyList.length === 0) {
+    resultContainer.innerHTML = `
+      <div style="background: #f0fdf4; border: 1px solid #86efac; color: #166534; padding: 12px; border-radius: 8px; font-size: 12px;">
+        ✅ <b>Audit Selesai:</b> Seluruh lokasi toko valid dan berada dalam batas wilayah yang sesuai!
+      </div>
+    `;
+    if (btnExport) btnExport.style.display = 'none';
+    showToast("✅ Audit Selesai: Tidak ada anomali terdeteksi!");
+    return;
+  }
+
+  if (btnExport) btnExport.style.display = 'inline-flex';
+
+  let html = `
+    <div style="background: #fef2f2; border: 1px solid #fca5a5; color: #991b1b; padding: 10px; border-radius: 8px; font-size: 12px; font-weight: 700; margin-bottom: 10px;">
+      ⚠️ Terdeteksi ${anomalyList.length} Toko Anomali (Sinar Merah di Peta)
+    </div>
+  `;
+
+  anomalyList.forEach(item => {
+    const o = item.outlet;
+    const code = o.customer_number || o.id || '-';
+    html += `
+      <div class="anomaly-item" data-id="${o.id || o.customer_number}">
+        <div style="font-weight: 700; color: #991b1b; font-size: 12px;">${o.name} (${code})</div>
+        <div style="font-size: 11px; color: #7f1d1d; margin-top: 2px;">⚠️ <b>Anomali:</b> ${item.reason}</div>
+        <div style="font-size: 10px; color: #64748b; margin-top: 2px;">Kec: ${o.kecamatan || '-'} | Kab: ${KODYA_MAP[o.kodya] || o.kodya || '-'}</div>
+      </div>
+    `;
+  });
+
+  resultContainer.innerHTML = html;
+
+  const items = resultContainer.querySelectorAll('.anomaly-item');
+  items.forEach(el => {
+    el.addEventListener('click', () => {
+      const outletId = el.getAttribute('data-id');
+      const target = sourceData.find(o => String(o.id) === String(outletId) || String(o.customer_number) === String(outletId));
+      if (target) {
+        showOutletDetail(target, false);
+        const lat = parseFloat(target.lat ?? target.latitude);
+        const lng = parseFloat(target.lng ?? target.longitude);
+
+        if (!isNaN(lat) && !isNaN(lng) && window.map) {
+          window.map.flyTo([lat, lng], 17, { animate: true, duration: 1.2 });
+        }
+        showToast(`📍 Menampilkan lokasi anomali: ${target.name}`);
+      }
+    });
+  });
+
+  showToast(`⚠️ Selesai! ${anomalyList.length} toko anomali telah ditandai sinar merah di peta.`);
+}
+
+// EXPORT ANOMALI KE EXCEL / CSV DENGAN KODIFIKASI UTF-8
+function exportAnomalyToExcel() {
+  if (!lastAnomalyList || lastAnomalyList.length === 0) {
+    showToast("⚠️ Tidak ada data anomali yang dapat di-export.");
+    return;
+  }
+
+  let csvContent = "\uFEFFKode Customer,Nama Toko,Kabupaten/Kodya,Kecamatan,Alamat,Latitude,Longitude,Detail Anomali\n";
+
+  lastAnomalyList.forEach(item => {
+    const o = item.outlet;
+    const custCode = `"${(o.customer_number || o.id || '').toString().replace(/"/g, '""')}"`;
+    const name = `"${(o.name || '').toString().replace(/"/g, '""')}"`;
+    const kodya = `"${(KODYA_MAP[o.kodya] || o.kodya || '').toString().replace(/"/g, '""')}"`;
+    const kec = `"${(Array.isArray(o.kecamatan) ? o.kecamatan.join(';') : (o.kecamatan || '')).toString().replace(/"/g, '""')}"`;
+    const alamat = `"${(o.address || '').toString().replace(/"/g, '""')}"`;
+    const lat = o.lat ?? o.latitude ?? '-';
+    const lng = o.lng ?? o.longitude ?? '-';
+    const reason = `"${(item.reason || '').toString().replace(/"/g, '""')}"`;
+
+    csvContent += `${custCode},${name},${kodya},${kec},${alamat},${lat},${lng},${reason}\n`;
+  });
+
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.setAttribute('href', url);
+  link.setAttribute('download', `SpotRevenue_Audit_Anomali_Koordinat_${new Date().toISOString().slice(0,10)}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+
+  showToast("📥 File Audit Anomali berhasil di-download! Silakan buka di Excel.");
 }
 
 function showOutletDetail(outlet, autoSwitchTab = true) {
   selectedOutlet = outlet;
+  window.selectedOutlet = outlet;
 
   if (autoSwitchTab) {
     const btnDetail = document.querySelector('.btn-module-nav[data-modul="modul-detail"]');
@@ -782,9 +1436,23 @@ function showOutletDetail(outlet, autoSwitchTab = true) {
   } else {
     brandListEl.innerHTML = '<li>Tidak ada data brand.</li>';
   }
+
+  const lat = outlet.lat ?? outlet.latitude ?? (outlet.location ? outlet.location.lat : null);
+  const lng = outlet.lng ?? outlet.longitude ?? (outlet.location ? outlet.location.lng : null);
+
+  if (lat != null && lng != null) {
+    updateCoordDisplay(lat, lng);
+  } else {
+    document.getElementById('val-lat').innerText = '-';
+    document.getElementById('val-lng').innerText = '-';
+  }
+
+  updateBufferZoneAnalysis();
 }
 
 function updateCoordDisplay(lat, lng) {
-  document.getElementById('val-lat').innerText = parseFloat(lat).toFixed(6);
-  document.getElementById('val-lng').innerText = parseFloat(lng).toFixed(6);
+  const elLat = document.getElementById('val-lat');
+  const elLng = document.getElementById('val-lng');
+  if (elLat) elLat.innerText = parseFloat(lat).toFixed(6);
+  if (elLng) elLng.innerText = parseFloat(lng).toFixed(6);
 }
