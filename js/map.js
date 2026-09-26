@@ -1,5 +1,5 @@
 /* ==============================================================================
-   SpotRevenue Map Engine v3.5 (Targeted Marker Update, Spatial Catchment & Route)
+   SpotRevenue Map Engine v3.7 (Complete Unified & Clean Reset Support)
    Lead Developer: Urai Ikhsan Fadhilah
    ============================================================================== */
 
@@ -235,7 +235,6 @@ function renderOutletMarkers(outlets) {
   map.invalidateSize();
 }
 
-/* FUNGSI MENGGAMBAR LINGKARAN RADIUS CATCHMENT */
 function drawBufferCircle(latlng, radiusMeters) {
   if (!map) initMap();
   if (!map || !bufferLayerGroup) return;
@@ -247,8 +246,8 @@ function drawBufferCircle(latlng, radiusMeters) {
   const circle = L.circle(latlng, {
     pane: 'bufferPane',
     radius: radiusMeters,
-    color: '#38bdf8',        // Warna garis biru langit terang
-    fillColor: '#38bdf8',    // Isian transparan
+    color: '#38bdf8',
+    fillColor: '#38bdf8',
     fillOpacity: 0.20,
     weight: 2.5,
     dashArray: '6, 6',
@@ -265,7 +264,6 @@ function clearBufferCircle() {
   }
 }
 
-/* FUNGSI MENGGAMBAR GARIS TUMPANG TINDIH OUTLET (<500M) */
 function highlightCannibalizationPairs(pairs) {
   if (!map) initMap();
   if (!map || !cannibalizationLayerGroup) return;
@@ -288,10 +286,10 @@ function highlightCannibalizationPairs(pairs) {
       lineBounds.push([bLat, bLng]);
 
       const polyline = L.polyline(latlngs, {
-        color: '#f97316', // Warna Oranye Peringatan
+        color: '#f97316',
         weight: 3,
-        opacity: 0.9,
-        dashArray: '8, 8'
+        opacity: 0.85,
+        dashArray: '6, 6'
       });
 
       polyline.bindPopup(`
@@ -308,7 +306,11 @@ function highlightCannibalizationPairs(pairs) {
   });
 
   if (lineBounds.length > 0) {
-    map.fitBounds(L.latLngBounds(lineBounds), { padding: [50, 50], maxZoom: 16 });
+    try {
+      map.fitBounds(L.latLngBounds(lineBounds), { padding: [50, 50], maxZoom: 16 });
+    } catch (e) {
+      console.warn("Fit bounds map error ignored:", e);
+    }
   }
 }
 
@@ -318,7 +320,6 @@ function clearCannibalizationLines() {
   }
 }
 
-/* FUNGSI MENGGAMBAR RUTE EFFISIEN DENGAN POLYLINE */
 function drawSalesRoute(coords) {
   if (!map) initMap();
   if (!map || !routeLayerGroup) return;
@@ -336,6 +337,12 @@ function drawSalesRoute(coords) {
 
   routeLayerGroup.addLayer(polyline);
   map.fitBounds(polyline.getBounds(), { padding: [50, 50] });
+}
+
+function clearSalesRoute() {
+  if (routeLayerGroup) {
+    routeLayerGroup.clearLayers();
+  }
 }
 
 function updateSingleMarkerAnomalyState(custCode, isManual) {
@@ -551,6 +558,7 @@ window.clearBufferCircle = clearBufferCircle;
 window.highlightCannibalizationPairs = highlightCannibalizationPairs;
 window.clearCannibalizationLines = clearCannibalizationLines;
 window.drawSalesRoute = drawSalesRoute;
+window.clearSalesRoute = clearSalesRoute;
 window.updateSingleMarkerAnomalyState = updateSingleMarkerAnomalyState;
 window.applyAnomalyStylesToMarkers = applyAnomalyStylesToMarkers;
 window.clearAnomalyAudit = clearAnomalyAudit;

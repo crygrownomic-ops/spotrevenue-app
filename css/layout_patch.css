@@ -1,0 +1,94 @@
+/* ==============================================================================
+   SpotRevenue Sidebar Expansion & Module Component Styling v4.3
+   ============================================================================== */
+
+/* Pelebaran Sidebar dari 280px ke 340px agar muat kontrol modular */
+#sidebar {
+  width: 340px !important;
+  max-width: 90vw;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s ease;
+}
+
+#sidebar.sidebar-expanded {
+  transform: translateX(0);
+}
+
+/* Container Tombol & Kontrol Modul Tambahan */
+.module-control-group {
+  background: rgba(15, 23, 42, 0.75);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  border-radius: 8px;
+  padding: 10px;
+  margin-top: 10px;
+}
+
+.module-control-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: #38bdf8;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-module-action {
+  width: 100%;
+  padding: 7px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 1px solid transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.btn-module-wa {
+  background: rgba(34, 197, 94, 0.2);
+  border-color: #22c55e;
+  color: #86efac;
+}
+.btn-module-wa:hover { background: rgba(34, 197, 94, 0.35); }
+
+.btn-module-gmaps {
+  background: rgba(56, 189, 248, 0.2);
+  border-color: #38bdf8;
+  color: #7dd3fc;
+}
+.btn-module-gmaps:hover { background: rgba(56, 189, 248, 0.35); }
+
+.btn-module-pdf {
+  background: rgba(168, 85, 247, 0.2);
+  border-color: #a855f7;
+  color: #d8b4fe;
+}
+.btn-module-pdf:hover { background: rgba(168, 85, 247, 0.35); }
+
+.btn-module-churn {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: #f87171;
+  color: #fca5a5;
+}
+.btn-module-churn:hover { background: rgba(239, 68, 68, 0.35); }
+
+/* Badge Peringatan Toko Drop */
+.churn-badge-warning {
+  background: #ef4444;
+  color: #ffffff;
+  font-size: 9px;
+  font-weight: 800;
+  padding: 2px 6px;
+  border-radius: 4px;
+  animation: pulse-red 1.5s infinite;
+}
+
+@keyframes pulse-red {
+  0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+  70% { box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+}

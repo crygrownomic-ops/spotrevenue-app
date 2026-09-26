@@ -1,5 +1,5 @@
 /* ==============================================================================
-   SpotRevenue Application Controller v3.7 (Unfreeze Guarantee & Spatial Grid Optimization)
+   SpotRevenue Application Controller v4.2 (OSRM Road Network Integrated)
    Lead Developer: Urai Ikhsan Fadhilah
    ============================================================================== */
 
@@ -287,9 +287,15 @@ function setupSpatialModuleListeners() {
     radiusSelect.addEventListener('change', updateBufferZoneAnalysis);
   }
 
-  const btnCannibal = document.getElementById('btn-check-cannibalization');
-  if (btnCannibal) {
-    btnCannibal.addEventListener('click', checkCannibalization);
+  const btnCoverage = document.getElementById('btn-check-cannibalization');
+  if (btnCoverage) {
+    btnCoverage.innerText = "🔍 Analisis Coverage Gap & Potensi Wilayah";
+    btnCoverage.addEventListener('click', checkCoverageGapAnalysis);
+
+    const cardTitle = btnCoverage.closest('.section-card')?.querySelector('h3, .card-title, strong');
+    if (cardTitle) {
+      cardTitle.innerText = "📍 Analisis Coverage & Potensi Wilayah";
+    }
   }
 
   const btnAudit = document.getElementById('btn-run-anomaly-audit');
@@ -374,160 +380,423 @@ function updateBufferZoneAnalysis() {
   }
 }
 
-/* EVALUASI TUMPANG TINDIH WILAYAH / KANIBALISASI (<500M) - HIGH PERFORMANCE & UNFREEZE GUARANTEED */
-async function checkCannibalization() {
-  const dataset = window.lastFilteredOutlets || activeOutletData;
-  if (!dataset || dataset.length === 0) {
-    showToast("Tidak ada toko untuk dievaluasi.");
+function normalizeFieldArray(value) {
+  if (Array.isArray(value)) return value.filter(Boolean).map(v => String(v).trim()).filter(Boolean);
+  if (value === null || value === undefined || value === '') return [];
+  return [String(value).trim()].filter(Boolean);
+}
+
+function getOutletKey(outlet) {
+  return String(outlet?.customer_number || outlet?.id || outlet?.name || '');
+}
+
+function getOutletSales(outlet) {
+  const value = Number(outlet?.current_total ?? outlet?.total_sales ?? 0);
+  return Number.isFinite(value) ? Math.max(0, value) : 0;
+}
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+/* ==========================================================================
+   ANALISIS COVERAGE GAP & POTENSI WILAYAH (WITH AUTO-ZOOM & RESET)
+   ========================================================================== */
+function checkCoverageGapAnalysis() {
+  const dataset = (window.lastFilteredOutlets && window.lastFilteredOutlets.length > 0)
+    ? window.lastFilteredOutlets
+    : activeOutletData;
+
+  if (!Array.isArray(dataset) || dataset.length === 0) {
+    showToast("Belum ada data toko terimpor atau terfilter untuk dianalisis.");
     return;
   }
 
-  showLoading("Mengevaluasi tumpang tindih lokasi...");
+  showLoading("Menganalisis Coverage Gap & Potensi Wilayah...");
 
-  // Jeda 50ms agar UI browser sempat merender modal loading
-  await new Promise(resolve => setTimeout(resolve, 50));
+  setTimeout(() => {
+    try {
+      const kecMap = {};
+      let grandTotalSales = 0;
 
-  const startTime = performance.now();
-  const overlappingPairs = [];
+      dataset.forEach(item => {
+        const kec = Array.isArray(item.kecamatan) ? item.kecamatan[0] : (item.kecamatan || 'Lainnya');
+        const sales = getOutletSales(item);
+        grandTotalSales += sales;
+
+        if (!kecMap[kec]) {
+          kecMap[kec] = { count: 0, sales: 0, outlets: [] };
+        }
+        kecMap[kec].count++;
+        kecMap[kec].sales += sales;
+        kecMap[kec].outlets.push(item);
+      });
+
+      const kecList = Object.keys(kecMap).map(k => {
+        const avg = kecMap[k].sales / kecMap[k].count;
+        return {
+          kecamatan: k,
+          count: kecMap[k].count,
+          sales: kecMap[k].sales,
+          avgSales: avg,
+          outlets: kecMap[k].outlets
+        };
+      });
+
+      kecList.sort((a, b) => b.sales - a.sales);
+
+      renderCoverageGapResultsUI(kecList, grandTotalSales, dataset.length);
+      showToast(`Analisis Selesai: ${kecList.length} Kecamatan Terpetakan.`);
+
+    } catch (err) {
+      console.error("Gagal menganalisis coverage gap:", err);
+      showToast("Terjadi kesalahan saat menganalisis coverage gap.");
+    } finally {
+      hideLoading();
+    }
+  }, 100);
+}
+
+function renderCoverageGapResultsUI(kecList, grandTotalSales, totalOutletCount) {
+  const parentBtn = document.getElementById('btn-check-cannibalization');
+  if (!parentBtn) return;
+
+  const parentCard = parentBtn.closest('.section-card');
+  if (!parentCard) return;
+
+  let resultContainer = document.getElementById('cannibalization-results-container');
+  if (!resultContainer) {
+    resultContainer = document.createElement('div');
+    resultContainer.id = 'cannibalization-results-container';
+    parentCard.appendChild(resultContainer);
+  }
+
+  resultContainer.style.cssText =
+    'margin-top: 12px; max-height: 360px; overflow-y: auto; background: rgba(15, 23, 42, 0.95);' +
+    'border: 1px solid #38bdf8; border-radius: 8px; padding: 10px; display: block !important; color: #ffffff;';
+
+  const metricUpper = activeMetric.toUpperCase();
+  const formatVal = (v) => activeMetric === 'val' ? `Rp ${Math.round(v).toLocaleString('id-ID')}` : `${Math.round(v).toLocaleString('id-ID')} ${metricUpper}`;
+
+  let html = `
+    <div style="font-weight: 700; color: #38bdf8; font-size: 11.5px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center;">
+      <span>📍 Profil Coverage Wilayah</span>
+      <span style="color: #cbd5e1; font-weight: 400; font-size: 10px;">${kecList.length} Kecamatan</span>
+    </div>
+
+    <button id="btn-reset-coverage-filter"
+      style="width: 100%; margin-bottom: 8px; background: rgba(56, 189, 248, 0.2); border: 1px solid #38bdf8;
+      color: #7dd3fc; padding: 6px; border-radius: 5px; font-size: 10.5px; font-weight: 700; cursor: pointer; transition: 0.2s;">
+      🔄 Tampilkan Semua Outlet (Reset Filter)
+    </button>
+
+    <div style="font-size: 10px; color: #cbd5e1; margin-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 6px;">
+      Total Akumulasi: <b style="color: #34d399;">${formatVal(grandTotalSales)}</b> dari <b style="color: #fff;">${totalOutletCount} Toko</b>.
+    </div>
+
+    <div class="coverage-list-wrapper">
+  `;
+
+  kecList.forEach((item, idx) => {
+    const contribPct = grandTotalSales > 0 ? ((item.sales / grandTotalSales) * 100).toFixed(1) : '0';
+    const isHotspot = idx < Math.max(1, Math.ceil(kecList.length * 0.2));
+    const tagBg = isHotspot ? 'background: rgba(16,185,129,0.2); color: #a7f3d0; border: 1px solid #10b981;' : 'background: rgba(56,189,248,0.15); color: #7dd3fc; border: 1px solid #38bdf8;';
+    const tagText = isHotspot ? '🔥 HOTSPOT' : '📍 REGULAR';
+
+    html += `
+      <div class="coverage-kec-item" data-kec="${escapeHtml(item.kecamatan)}" data-idx="${idx}"
+        style="padding: 8px; border-bottom: 1px solid rgba(255,255,255,0.08); cursor: pointer; border-radius: 5px; transition: background 0.2s; margin-bottom: 5px; background: rgba(0,0,0,0.3);">
+
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <div style="font-weight: 700; color: #ffffff; font-size: 11.5px;">
+            ${idx + 1}. Kecamatan ${escapeHtml(item.kecamatan)}
+          </div>
+          <span style="font-size: 8.5px; padding: 2px 5px; border-radius: 3px; font-weight: 700; ${tagBg}">
+            ${tagText}
+          </span>
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px; margin-top: 4px; font-size: 10px; color: #cbd5e1;">
+          <div>• Omset: <b style="color: #34d399;">${formatVal(item.sales)}</b> (${contribPct}%)</div>
+          <div>• Jumlah Toko: <b style="color: #fff;">${item.count} Toko</b></div>
+          <div>• Rata-rata/Toko: <b style="color: #fbbf24;">${formatVal(item.avgSales)}</b></div>
+        </div>
+      </div>
+    `;
+  });
+
+  html += `</div>`;
+  resultContainer.innerHTML = html;
+
+  // Tombol Reset Filter ke Semua Outlet
+  const btnResetFilter = document.getElementById('btn-reset-coverage-filter');
+  if (btnResetFilter) {
+    btnResetFilter.addEventListener('click', () => {
+      const selKec = document.getElementById('select-kecamatan');
+      if (selKec) selKec.value = '';
+      applyFilters();
+
+      if (window.map && activeOutletData.length > 0) {
+        const allCoords = activeOutletData
+          .map(o => [parseFloat(o.lat ?? o.latitude), parseFloat(o.lng ?? o.longitude)])
+          .filter(([lat, lng]) => Number.isFinite(lat) && Number.isFinite(lng) && lat !== 0 && lng !== 0);
+
+        if (allCoords.length > 0) {
+          window.map.fitBounds(allCoords, { padding: [40, 40] });
+        }
+      }
+
+      showToast("Kembali menampilkan seluruh outlet!");
+    });
+  }
+
+  // Klik Item Kecamatan -> Filter & Directly Fly To Coordinates
+  resultContainer.querySelectorAll('.coverage-kec-item').forEach(el => {
+    el.addEventListener('click', () => {
+      const idx = parseInt(el.getAttribute('data-idx'), 10);
+      const targetKecData = kecList[idx];
+      if (!targetKecData) return;
+
+      const selKec = document.getElementById('select-kecamatan');
+      if (selKec) {
+        selKec.value = targetKecData.kecamatan;
+        applyFilters();
+      }
+
+      const coords = targetKecData.outlets
+        .map(o => [parseFloat(o.lat ?? o.latitude), parseFloat(o.lng ?? o.longitude)])
+        .filter(([lat, lng]) => Number.isFinite(lat) && Number.isFinite(lng) && lat !== 0 && lng !== 0);
+
+      if (coords.length > 0 && window.map) {
+        if (coords.length === 1) {
+          window.map.flyTo(coords[0], 16, { animate: true, duration: 1.0 });
+        } else {
+          window.map.fitBounds(coords, { padding: [60, 60], maxZoom: 16 });
+        }
+      }
+
+      showToast(`Menyoroti ${coords.length} toko di Kec. ${targetKecData.kecamatan}`);
+    });
+  });
+}
+
+/* ==========================================================================
+   OPTIMASI RUTE KUNJUNGAN FIELD SALES (OSRM ROAD NETWORK ROUTING API)
+   ========================================================================== */
+async function calculateOptimizedRoute() {
+  if (!selectedOutlet) {
+    showToast("Silakan klik salah satu outlet utama di peta sebagai titik awal rute!");
+    return;
+  }
+
+  const limitEl = document.getElementById('select-route-limit');
+  const limit = Math.max(2, parseInt(limitEl?.value || '10', 10) || 10);
+
+  const dataset = (window.lastFilteredOutlets && window.lastFilteredOutlets.length > 0)
+    ? window.lastFilteredOutlets
+    : activeOutletData;
+
+  const startLat = parseFloat(selectedOutlet.lat ?? selectedOutlet.latitude);
+  const startLng = parseFloat(selectedOutlet.lng ?? selectedOutlet.longitude);
+
+  if (!Number.isFinite(startLat) || !Number.isFinite(startLng)) {
+    showToast("Koordinat outlet utama tidak valid.");
+    return;
+  }
+
+  showLoading("Menghitung rute presisi berdasarkan jaringan jalan raya (OSRM)...");
 
   try {
-    const thresholdMeters = 500;
-    const cellSize = 0.0045; // Sel grid ~500m
-    const grid = new Map();
+    const selectedSalespersons = normalizeFieldArray(selectedOutlet.salespersons);
 
-    // 1. Plotting toko ke Spatial Grid
-    for (let i = 0; i < dataset.length; i++) {
-      const o = dataset[i];
-      const lat = parseFloat(o.lat ?? o.latitude);
-      const lng = parseFloat(o.lng ?? o.longitude);
+    // Ambil kandidat toko potensial terdekat dulu (filter radius terdekat < 10 km)
+    let candidates = dataset.filter(outlet => {
+      const lat = parseFloat(outlet.lat ?? outlet.latitude);
+      const lng = parseFloat(outlet.lng ?? outlet.longitude);
 
-      if (!isNaN(lat) && !isNaN(lng) && !(lat === 0 && lng === 0)) {
-        const gx = Math.floor(lat / cellSize);
-        const gy = Math.floor(lng / cellSize);
-        const cellKey = `${gx}_${gy}`;
+      if (!Number.isFinite(lat) || !Number.isFinite(lng) || (lat === 0 && lng === 0)) return false;
+      if (getOutletKey(outlet) === getOutletKey(selectedOutlet)) return false;
 
-        if (!grid.has(cellKey)) {
-          grid.set(cellKey, []);
-        }
-        grid.get(cellKey).push({ outlet: o, lat, lng, index: i });
-      }
-    }
-
-    const evaluatedPairs = new Set();
-
-    // 2. Evaluasi Efisien Tetangga Sel Grid
-    grid.forEach((cellOutlets, cellKey) => {
-      const [gx, gy] = cellKey.split('_').map(Number);
-
-      for (let dx = -1; dx <= 1; dx++) {
-        for (let dy = -1; dy <= 1; dy++) {
-          const neighborKey = `${gx + dx}_${gy + dy}`;
-          const neighborOutlets = grid.get(neighborKey);
-
-          if (!neighborOutlets) continue;
-
-          for (let aIdx = 0; aIdx < cellOutlets.length; aIdx++) {
-            const a = cellOutlets[aIdx];
-            for (let bIdx = 0; bIdx < neighborOutlets.length; bIdx++) {
-              const b = neighborOutlets[bIdx];
-
-              if (a.index >= b.index) continue;
-
-              const pairId = `${a.index}_${b.index}`;
-              if (evaluatedPairs.has(pairId)) continue;
-              evaluatedPairs.add(pairId);
-
-              const dist = getDistanceInMeters(a.lat, a.lng, b.lat, b.lng);
-              if (dist < thresholdMeters) {
-                overlappingPairs.push({ a: a.outlet, b: b.outlet, dist: Math.round(dist) });
-              }
-            }
-          }
+      if (selectedSalespersons.length > 0) {
+        const outletSalespersons = normalizeFieldArray(outlet.salespersons);
+        if (outletSalespersons.length > 0 && !selectedSalespersons.some(sp => outletSalespersons.includes(sp))) {
+          return false;
         }
       }
+      return true;
     });
 
-    const endTime = performance.now();
-    const durationMs = (endTime - startTime).toFixed(1);
-
-    // 3. Highlight Garis Peta (Maksimal 150 Garis Pertama untuk Mencegah Map Lag)
-    if (typeof window.highlightCannibalizationPairs === 'function') {
-      window.highlightCannibalizationPairs(overlappingPairs.slice(0, 150));
+    if (!candidates.length) {
+      hideLoading();
+      showToast("Tidak ditemukan outlet kandidat yang sesuai untuk rute ini.");
+      return;
     }
 
-    // 4. Render Hasil Rincian ke Sidebar
-    renderCannibalizationResultsUI(overlappingPairs, durationMs);
+    // Urutkan kandidat berdasarkan skor prioritas omset & jarak garis lurus awal
+    candidates.sort((a, b) => {
+      const distA = getDistanceInMeters(startLat, startLng, parseFloat(a.lat ?? a.latitude), parseFloat(a.lng ?? a.longitude));
+      const distB = getDistanceInMeters(startLat, startLng, parseFloat(b.lat ?? b.latitude), parseFloat(b.lng ?? b.longitude));
+      const scoreA = (getOutletSales(a) / 1000000) - (distA / 1000);
+      const scoreB = (getOutletSales(b) / 1000000) - (distB / 1000);
+      return scoreB - scoreA;
+    });
 
-    showToast(`Evaluasi Selesai (${durationMs} ms): Ditemukan ${overlappingPairs.length} pasangan toko berdekatan.`);
+    // Ambil top kandidat sesuai limit user (Max 12 toko agar API OSRM responsif dan cepat)
+    const topCandidates = candidates.slice(0, Math.min(candidates.length, limit - 1));
+    const allRouteNodes = [selectedOutlet, ...topCandidates];
+
+    // Susun string koordinat OSRM: lng,lat;lng,lat...
+    const coordString = allRouteNodes.map(o => {
+      const lat = parseFloat(o.lat ?? o.latitude);
+      const lng = parseFloat(o.lng ?? o.longitude);
+      return `${lng},${lat}`;
+    }).join(';');
+
+    // Panggil OSRM Trip Optimization API (Mencari rute urut jalan riil paling optimal)
+    const osrmUrl = `https://router.project-osrm.org/trip/v1/driving/${coordString}?source=first&destination=any&roundtrip=false&geometries=geojson&overview=full`;
+    
+    const response = await fetch(osrmUrl);
+    const data = await response.json();
+
+    if (data.code === 'Ok' && data.trips && data.trips.length > 0) {
+      const trip = data.trips[0];
+      const waypointOrder = data.waypoints.map(w => w.waypoint_index);
+
+      // Susun urutan toko hasil optimasi jaringan jalan OSRM
+      const orderedWaypoints = data.waypoints.sort((a, b) => a.trips_index - b.trips_index);
+      const optimizedRoute = orderedWaypoints.map(w => allRouteNodes[w.waypoint_index]);
+
+      // Ambil geometri jalur jalan raya (Leaflet format: [lat, lng])
+      const roadPolyline = trip.geometry.coordinates.map(coord => [coord[1], coord[0]]);
+
+      renderOptimizedRouteUI(optimizedRoute, trip.distance, roadPolyline);
+      showToast(`Rute Jalan Raya Selesai: ${optimizedRoute.length} titik · ${(trip.distance / 1000).toFixed(2)} km`);
+
+    } else {
+      // Fallback jika OSRM API tidak merespons
+      runFallbackLocalRouting(selectedOutlet, topCandidates, limit);
+    }
 
   } catch (err) {
-    console.error("Gagal melakukan evaluasi tumpang tindih:", err);
-    showToast("Terjadi kesalahan saat mengevaluasi tumpang tindih.");
+    console.warn("OSRM API error, menggunakan fallback routing lokal:", err);
+    runFallbackLocalRouting(selectedOutlet, candidates, limit);
   } finally {
-    // PASTI DIPANGGIL: Menjamin loading overlay tertutup dalam kondisi apa pun
     hideLoading();
   }
 }
 
-/* HELPER RENDER HASIL SIDEBAR SPASIAL */
-function renderCannibalizationResultsUI(overlappingPairs, durationMs) {
-  let resultContainer = document.getElementById('cannibalization-results-container');
-  const parentBtn = document.getElementById('btn-check-cannibalization');
-  const parentCard = parentBtn ? parentBtn.closest('.section-card') : null;
+/* FALLBACK LOCAL ROUTING JIKA OFFLINE */
+function runFallbackLocalRouting(startOutlet, candidates, limit) {
+  const route = [startOutlet];
+  const legs = [];
+  let current = startOutlet;
 
-  if (!resultContainer && parentCard) {
-    resultContainer = document.createElement('div');
-    resultContainer.id = 'cannibalization-results-container';
-    resultContainer.style.cssText = 'margin-top: 10px; max-height: 220px; overflow-y: auto; background: rgba(0,0,0,0.5); border: 1px solid rgba(249, 115, 22, 0.4); border-radius: 8px; padding: 8px;';
-    parentCard.appendChild(resultContainer);
+  while (route.length < limit && candidates.length > 0) {
+    const cLat = parseFloat(current.lat ?? current.latitude);
+    const cLng = parseFloat(current.lng ?? current.longitude);
+
+    let bestIdx = 0;
+    let maxScore = -Infinity;
+
+    candidates.forEach((o, idx) => {
+      const lat = parseFloat(o.lat ?? o.latitude);
+      const lng = parseFloat(o.lng ?? o.longitude);
+      const dist = getDistanceInMeters(cLat, cLng, lat, lng);
+      const sales = getOutletSales(o);
+
+      const score = (sales / 1000000) - (dist / 800);
+      if (score > maxScore) {
+        maxScore = score;
+        bestIdx = idx;
+      }
+    });
+
+    const nextTarget = candidates.splice(bestIdx, 1)[0];
+    const dist = getDistanceInMeters(cLat, cLng, parseFloat(nextTarget.lat ?? nextTarget.latitude), parseFloat(nextTarget.lng ?? nextTarget.longitude));
+    
+    route.push(nextTarget);
+    legs.push({ distance: Math.round(dist) });
+    current = nextTarget;
   }
 
-  if (!resultContainer) return;
+  const totalDist = legs.reduce((s, l) => s + l.distance, 0);
+  const routeCoords = route.map(r => [parseFloat(r.lat ?? r.latitude), parseFloat(r.lng ?? r.longitude)]);
 
-  if (overlappingPairs.length === 0) {
-    resultContainer.innerHTML = `
-      <div style="color: #a7f3d0; font-size: 11px; text-align: center; padding: 8px;">
-        ✅ Tidak ada outlet yang saling berdekatan (&lt; 500m). Teritori optimal! (${durationMs} ms)
-      </div>
-    `;
-  } else {
+  renderOptimizedRouteUI(route, totalDist, routeCoords);
+  showToast(`Rute Kluster Selesai (Offline Mode): ${route.length} titik`);
+}
+
+/* RENDER TAMPILAN RUTE PETA DAN PANEL HASIL */
+function renderOptimizedRouteUI(route, totalDistanceMeters, roadPolylineCoords) {
+  const container = document.getElementById('route-steps-container');
+  const totalSales = route.reduce((sum, outlet) => sum + getOutletSales(outlet), 0);
+
+  if (container) {
     let html = `
-      <div style="font-weight: 700; color: #f97316; font-size: 11.5px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center;">
-        <span>⚠️ Ditemukan ${overlappingPairs.length} Pasangan Toko (&lt;500m):</span>
-        <span style="color: #cbd5e1; font-weight: 400; font-size: 10px;">⏱️ ${durationMs} ms</span>
+      <div style="padding: 7px 8px; margin-bottom: 7px; border-radius: 6px; background: rgba(56, 189, 248, 0.1); border: 1px solid rgba(56, 189, 248, 0.3);">
+        <div style="font-size: 10px; color: #7dd3fc; font-weight: 700;">RINGKASAN RUTE JALAN RAYA (PRESISI)</div>
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; margin-top: 5px;">
+          <div><div style="font-size: 8.5px; color: #94a3b8;">TITIK</div><b style="font-size: 11px; color: #fff;">${route.length} Toko</b></div>
+          <div><div style="font-size: 8.5px; color: #94a3b8;">JARAK JALAN</div><b style="font-size: 11px; color: #fff;">${(totalDistanceMeters / 1000).toFixed(2)} km</b></div>
+          <div><div style="font-size: 8.5px; color: #94a3b8;">OMSET</div><b style="font-size: 11px; color: #34d399;">Rp ${Math.round(totalSales).toLocaleString('id-ID')}</b></div>
+        </div>
       </div>
+
+      <button id="btn-clear-sales-route"
+        style="width: 100%; margin-bottom: 8px; background: rgba(239, 68, 68, 0.2); border: 1px solid #f87171;
+        color: #fca5a5; padding: 5px; border-radius: 4px; font-size: 10.5px; font-weight: 600; cursor: pointer;">
+        🗑️ Hapus Rute di Peta
+      </button>
     `;
 
-    overlappingPairs.forEach((pair, idx) => {
+    route.forEach((item, idx) => {
+      const legText = idx === 0 ? '🚩 Titik Keberangkatan Awal' : `↳ Urutan Kunjungan Ke-${idx + 1}`;
+
       html += `
-        <div class="cannibal-pair-item" data-idx="${idx}" style="padding: 6px 8px; border-bottom: 1px solid rgba(255,255,255,0.08); cursor: pointer; border-radius: 4px; transition: background 0.2s;">
-          <div style="font-size: 11px; font-weight: 700; color: #ffffff;">${pair.a.name} <span style="color: #f97316;">↔</span> ${pair.b.name}</div>
-          <div style="font-size: 10px; color: #cbd5e1; display: flex; justify-content: space-between; margin-top: 2px;">
-            <span>Kec: ${pair.a.kecamatan || '-'}</span>
-            <b style="color: #f97316;">Jarak: ${pair.dist}m</b>
+        <div class="route-step-item" style="padding: 6px; border-bottom: 1px solid rgba(255,255,255,0.08);">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span class="step-num"
+              style="background: #38bdf8; color: #0f172a; width: 21px; height: 21px; border-radius: 50%;
+              display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700;">
+              ${idx + 1}
+            </span>
+
+            <div style="min-width: 0; flex: 1;">
+              <div style="font-weight: 700; color: #fff; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                ${escapeHtml(item.name || getOutletKey(item))}
+              </div>
+              <div style="font-size: 9.5px; color: #34d399;">
+                Omset: Rp ${Math.round(getOutletSales(item)).toLocaleString('id-ID')}
+              </div>
+              <div style="font-size: 8.5px; color: #38bdf8;">${legText}</div>
+            </div>
           </div>
         </div>
       `;
     });
 
-    resultContainer.innerHTML = html;
+    container.innerHTML = html;
 
-    const pairItems = resultContainer.querySelectorAll('.cannibal-pair-item');
-    pairItems.forEach(item => {
-      item.addEventListener('click', () => {
-        const idx = parseInt(item.getAttribute('data-idx'));
-        const pair = overlappingPairs[idx];
-        if (pair && window.map) {
-          const aLat = parseFloat(pair.a.lat ?? pair.a.latitude);
-          const aLng = parseFloat(pair.a.lng ?? pair.a.longitude);
-          const bLat = parseFloat(pair.b.lat ?? pair.b.latitude);
-          const bLng = parseFloat(pair.b.lng ?? pair.b.longitude);
-
-          window.map.fitBounds([[aLat, aLng], [bLat, bLng]], { padding: [80, 80], maxZoom: 17 });
-          showToast(`Fokus ke lokasi: ${pair.a.name} & ${pair.b.name}`);
+    const btnClearRoute = document.getElementById('btn-clear-sales-route');
+    if (btnClearRoute) {
+      btnClearRoute.addEventListener('click', () => {
+        if (typeof window.clearSalesRoute === 'function') {
+          window.clearSalesRoute();
         }
+        container.innerHTML = `<div style="color: #cbd5e1; font-size: 11px; text-align: center; padding: 6px;">Rute telah dibersihkan dari peta.</div>`;
+        showToast("Rute kunjungan berhasil dihapus.");
       });
-    });
+    }
+
+    // Gambar garis rute yang MENGIKUTI JALAN RAYA pada Leaflet Map
+    if (typeof window.drawSalesRoute === 'function') {
+      window.drawSalesRoute(roadPolylineCoords);
+    }
   }
 }
 
@@ -574,19 +843,34 @@ function setupIdeaLabFeatures() {
       if (activeQuadrantFilter === qType) {
         activeQuadrantFilter = null;
         quadCards.forEach(c => c.classList.remove('active-filter'));
-        showToast("Filter Kuadran Dinonaktifkan (Menampilkan Semua Toko)");
+        showToast("Filter Kuadran Dilepas (Kembali ke Formasi Awal Toko)");
       } else {
         activeQuadrantFilter = qType;
         quadCards.forEach(c => c.classList.remove('active-filter'));
         card.classList.add('active-filter');
 
         const names = { star: 'Star Outlets', cow: 'Cash Cows', question: 'Toko Potensial', risk: 'Underperform' };
-        showToast(`Filter Peta: Menyoroti ${names[qType]}`);
+        showToast(`Filter Kuadran: Menyoroti ${names[qType]} (Klik lagi untuk Reset)`);
       }
 
       applyFilters();
     });
   });
+
+  const quadContainer = document.querySelector('.bcg-matrix-container') || document.querySelector('.bcg-quad')?.parentElement;
+  if (quadContainer && !document.getElementById('btn-reset-quad-filter')) {
+    const resetBtn = document.createElement('button');
+    resetBtn.id = 'btn-reset-quad-filter';
+    resetBtn.style.cssText = 'width: 100%; margin-top: 8px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.2); color: #cbd5e1; padding: 6px; border-radius: 6px; font-size: 11px; font-weight: 600; cursor: pointer; transition: 0.2s;';
+    resetBtn.innerText = '🔄 Reset Kuadran (Tampilkan Semua Toko)';
+    resetBtn.addEventListener('click', () => {
+      activeQuadrantFilter = null;
+      quadCards.forEach(c => c.classList.remove('active-filter'));
+      applyFilters();
+      showToast("Formasi Toko Dikembalikan ke Semula");
+    });
+    quadContainer.appendChild(resetBtn);
+  }
 
   initPwaCapabilities();
 }
@@ -706,90 +990,6 @@ function generateExecutiveSummary() {
   `;
 
   container.innerHTML = html;
-}
-
-function calculateOptimizedRoute() {
-  if (!selectedOutlet) {
-    showToast("Silakan klik salah satu outlet utama di peta sebagai titik awal rute!");
-    return;
-  }
-
-  const limitEl = document.getElementById('select-route-limit');
-  const limit = parseInt(limitEl ? limitEl.value : '10');
-  const dataset = window.lastFilteredOutlets || activeOutletData;
-
-  const startLat = parseFloat(selectedOutlet.lat ?? selectedOutlet.latitude);
-  const startLng = parseFloat(selectedOutlet.lng ?? selectedOutlet.longitude);
-
-  if (isNaN(startLat) || isNaN(startLng)) {
-    showToast("Koordinat outlet utama tidak valid.");
-    return;
-  }
-
-  const unvisited = dataset.filter(o => {
-    const lat = parseFloat(o.lat ?? o.latitude);
-    const lng = parseFloat(o.lng ?? o.longitude);
-    return (o.id !== selectedOutlet.id && o.customer_number !== selectedOutlet.customer_number) && !isNaN(lat) && !isNaN(lng);
-  });
-
-  const route = [selectedOutlet];
-  let currentLat = startLat;
-  let currentLng = startLng;
-
-  while (route.length < limit && unvisited.length > 0) {
-    let nearestIdx = -1;
-    let minDist = Infinity;
-
-    for (let i = 0; i < unvisited.length; i++) {
-      const o = unvisited[i];
-      const dist = getDistanceInMeters(currentLat, currentLng, parseFloat(o.lat ?? o.latitude), parseFloat(o.lng ?? o.longitude));
-      if (dist < minDist) {
-        minDist = dist;
-        nearestIdx = i;
-      }
-    }
-
-    if (nearestIdx !== -1) {
-      const nextOutlet = unvisited.splice(nearestIdx, 1)[0];
-      route.push(nextOutlet);
-      currentLat = parseFloat(nextOutlet.lat ?? nextOutlet.latitude);
-      currentLng = parseFloat(nextOutlet.lng ?? nextOutlet.longitude);
-    } else {
-      break;
-    }
-  }
-
-  const container = document.getElementById('route-steps-container');
-  if (container) {
-    let html = '';
-    const routeCoords = [];
-
-    route.forEach((item, idx) => {
-      const lat = parseFloat(item.lat ?? item.latitude);
-      const lng = parseFloat(item.lng ?? item.longitude);
-      routeCoords.push([lat, lng]);
-
-      html += `
-        <div class="route-step-item">
-          <div style="display: flex; align-items: center; gap: 8px;">
-            <span class="step-num">${idx + 1}</span>
-            <div>
-              <div style="font-weight: 700; color: #ffffff; font-size: 11px;">${item.name}</div>
-              <div style="font-size: 9.5px; color: #a7f3d0;">${item.customer_number || item.id}</div>
-            </div>
-          </div>
-        </div>
-      `;
-    });
-
-    container.innerHTML = html;
-
-    if (typeof window.drawSalesRoute === 'function') {
-      window.drawSalesRoute(routeCoords);
-    }
-  }
-
-  showToast(`Rute Kunjungan Berhasil Dihitung (${route.length} Titik)`);
 }
 
 function initPwaCapabilities() {
@@ -1819,12 +2019,12 @@ function exportAnomalyToExcel() {
 
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.setAttribute('href', url);
-  link.setAttribute('download', `SpotRevenue_Audit_Anomali_Koordinat_${new Date().toISOString().slice(0,10)}.csv`);
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
+  const aLink = document.createElement('a');
+  aLink.setAttribute('href', url);
+  aLink.setAttribute('download', `SpotRevenue_Audit_Anomali_Koordinat_${new Date().toISOString().slice(0,10)}.csv`);
+  document.body.appendChild(aLink);
+  aLink.click();
+  document.body.removeChild(aLink);
 
   showToast("File Audit Anomali berhasil di-download!");
 }
