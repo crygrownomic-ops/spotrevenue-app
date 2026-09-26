@@ -763,7 +763,7 @@
         </section>
       </div>
 
-      <!-- MODUL 5: SPASIAL (MANUAL KLIK PETA & AUDIT ANOMALI DENGAN SINAR HITAM MENYALA) -->
+      <!-- MODUL 5: SPASIAL (MANUAL KLIK PETA & AUDIT ANOMALI DENGAN TOMBOL ON/OFF) -->
       <div id="modul-spasial" class="module-content-pane">
         <section class="section-card" style="background: rgba(16,185,129,0.06); border: 1px solid rgba(16,185,129,0.25);">
           <h3 class="section-title" style="color: #059669;">
@@ -810,19 +810,47 @@
           </button>
         </section>
 
-        <!-- AUDIT ANOMALI KOORDINAT OUTLET + EXPORT EXCEL & SINAR HITAM MENYALA -->
+        <!-- AUDIT ANOMALI KOORDINAT OUTLET + DUAL FILTERS & TOMBOL MATIKAN AUDIT -->
         <section class="section-card" style="margin-top: 14px; border: 1.5px solid #000000; background: #f8fafc;">
           <h3 class="section-title" style="color: #000000;">
             🚨 Audit Anomali Koordinat Outlet
           </h3>
           <p class="text-sub" style="color: #334155;">
-            Deteksi otomatis toko yang koordinatnya berada di laut, luar Indonesia, atau menyimpang jauh dari kecamatan/kabupaten:
+            Deteksi otomatis toko yang koordinatnya berada di laut, luar Indonesia, atau menyimpang jauh. Matikan audit jika pemeriksaan selesai:
           </p>
+
+          <!-- KONTROL OPSI PARAMETER AUDIT -->
+          <div style="background: #ffffff; padding: 10px; border-radius: 8px; margin-top: 10px; border: 1px solid #cbd5e1;">
+            <div style="font-weight: 700; color: #0f172a; font-size: 11px; margin-bottom: 6px;">⚙️ Opsi Parameter Audit:</div>
+            
+            <div style="margin-bottom: 6px;">
+              <label style="font-size: 10.5px; color: #64748b; display: block; margin-bottom: 2px; font-weight: 600;">Cakupan Target Toko:</label>
+              <select id="select-audit-scope" style="width: 100%; background: #f8fafc; color: #0f172a; border: 1px solid #94a3b8; padding: 5px; border-radius: 4px; font-size: 11px; font-weight: 600;">
+                <option value="filtered" selected>📍 Hanya Toko Terfilter saat ini</option>
+                <option value="all">🌐 Seluruh Master Data Toko</option>
+              </select>
+            </div>
+
+            <div>
+              <label style="font-size: 10.5px; color: #64748b; display: block; margin-bottom: 2px; font-weight: 600;">Kategori Jenis Anomali:</label>
+              <select id="select-audit-type" style="width: 100%; background: #f8fafc; color: #0f172a; border: 1px solid #94a3b8; padding: 5px; border-radius: 4px; font-size: 11px; font-weight: 600;">
+                <option value="all" selected>⭕ Semua Jenis Anomali</option>
+                <option value="zero">📍 Hanya Koordinat Kosong / Nol (0,0)</option>
+                <option value="ocean">🌊 Hanya Area Lautan / Luar Pesisir</option>
+                <option value="dist">📐 Hanya Penyimpangan Jarak Pusat Kodya</option>
+              </select>
+            </div>
+          </div>
 
           <div style="display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap;">
             <button id="btn-run-anomaly-audit" style="flex: 1; background: #000000; color: white; border: none; padding: 11px; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;">
               <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
               Jalankan Audit Anomali
+            </button>
+
+            <!-- TOMBOL MATIKAN AUDIT -->
+            <button id="btn-stop-anomaly-audit" style="background: #dc2626; color: white; border: none; padding: 11px 14px; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; display: none; align-items: center; justify-content: center; gap: 6px;">
+              🛑 Matikan Audit
             </button>
 
             <button id="btn-export-anomaly-excel" style="background: #15803d; color: white; border: none; padding: 11px 14px; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; display: none; align-items: center; justify-content: center; gap: 6px;">

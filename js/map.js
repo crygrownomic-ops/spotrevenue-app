@@ -1,5 +1,5 @@
 /* ==============================================================================
-   SpotRevenue Map Engine v2.7 (Zero-Lock Map Panes & Pure SVG Direct Clicks)
+   SpotRevenue Map Engine v2.9 (Targeted Marker Update & Zero-Lag Toggle)
    Lead Developer: Urai Ikhsan Fadhilah
    ============================================================================== */
 
@@ -66,10 +66,9 @@ function initMap() {
     attribution: '&copy; OpenStreetMap contributors | SpotRevenue Engine'
   }).addTo(map);
 
-  // --- MEMBENTUK LAYER PANES TERPISAH SUPAYA TIDAK SALING MENGUNCI ---
   map.createPane('bufferPane');
   map.getPane('bufferPane').style.zIndex = 350;
-  map.getPane('bufferPane').style.pointerEvents = 'none'; // SANGAT PENTING: TEMBUS KLIK 100%
+  map.getPane('bufferPane').style.pointerEvents = 'none';
 
   map.createPane('markerPane');
   map.getPane('markerPane').style.zIndex = 500;
@@ -114,15 +113,18 @@ function renderOutletMarkers(outlets) {
 
     if (lat !== null && lng !== null && !isNaN(lat) && !isNaN(lng) && !(lat === 0 && lng === 0)) {
       
-      const custCode = item.customer_number || item.id || '-';
+      const custCode = String(item.customer_number || item.id || '-');
       const kecName = Array.isArray(item.kecamatan) ? item.kecamatan[0] : (item.kecamatan || '-');
       
-      const isAnomaly = window.lastAnomalySet && window.lastAnomalySet.has(String(custCode));
+      const isSystemAnomaly = window.lastAnomalySet && window.lastAnomalySet.has(custCode);
+      const isManualAnomaly = window.manualAnomalySet && window.manualAnomalySet.has(custCode);
+      const isAnomaly = isSystemAnomaly || isManualAnomaly;
+
       const territoryColor = isAnomaly ? '#000000' : getKecamatanColor(kecName);
       const strokeColor = isAnomaly ? '#ef4444' : '#ffffff';
 
       const circle = L.circleMarker([lat, lng], {
-        pane: 'markerPane', // PASTI BERADA DI PANE MARKER ATAS
+        pane: 'markerPane',
         radius: isAnomaly ? 8 : 6,
         color: strokeColor,
         fillColor: territoryColor,
@@ -145,7 +147,6 @@ function renderOutletMarkers(outlets) {
       const kodyaName = KODYA_MAP_FULL[item.kodya] || item.kodya || '-';
       const addressName = item.address || 'Alamat tidak tersedia';
       
-      const isManualAnomaly = window.manualAnomalySet && window.manualAnomalySet.has(String(custCode));
       const anomalyBtnLabel = isManualAnomaly ? '🟢 Batal Anomali' : '⚫ Tandai Anomali Manual';
       const anomalyBtnBg = isManualAnomaly ? '#059669' : '#000000';
 
@@ -180,8 +181,8 @@ function renderOutletMarkers(outlets) {
         if (selectedMarker && selectedMarker !== circle) {
           const prevItem = selectedMarker.options.outletRef;
           if (prevItem) {
-            const prevCode = prevItem.customer_number || prevItem.id;
-            const isPrevAnomaly = window.lastAnomalySet && window.lastAnomalySet.has(String(prevCode));
+            const prevCode = String(prevItem.customer_number || prevItem.id);
+            const isPrevAnomaly = (window.lastAnomalySet && window.lastAnomalySet.has(prevCode)) || (window.manualAnomalySet && window.manualAnomalySet.has(prevCode));
             const prevKec = Array.isArray(prevItem.kecamatan) ? prevItem.kecamatan[0] : (prevItem.kecamatan || '-');
 
             selectedMarker.setStyle({
@@ -232,15 +233,61 @@ function renderOutletMarkers(outlets) {
   map.invalidateSize();
 }
 
+/* FUNGSI UPDATE MARKER TUNGGAL AGAR TIDAK MEMBEBANI HALAMAN */
+function updateSingleMarkerAnomalyState(custCode, isManual) {
+  if (!outletMarkersMap) return;
+  const marker = outletMarkersMap.get(String(custCode));
+  if (!marker) return;
+
+  const item = marker.options.outletRef;
+  const kecName = Array.isArray(item.kecamatan) ? item.kecamatan[0] : (item.kecamatan || '-');
+
+  if (isManual) {
+    marker.setStyle({
+      color: '#ef4444',
+      fillColor: '#000000',
+      radius: 9,
+      weight: 3.0,
+      fillOpacity: 1.0
+    });
+  } else {
+    const isSystem = window.lastAnomalySet && window.lastAnomalySet.has(String(custCode));
+    if (isSystem) {
+      marker.setStyle({
+        color: '#ef4444',
+        fillColor: '#000000',
+        radius: 9,
+        weight: 3.0,
+        fillOpacity: 1.0
+      });
+    } else {
+      marker.setStyle({
+        color: '#ffffff',
+        fillColor: getKecamatanColor(kecName),
+        radius: 6,
+        weight: 1.2,
+        fillOpacity: 0.95
+      });
+    }
+  }
+
+  if (marker.isPopupOpen && marker.isPopupOpen()) {
+    marker.closePopup();
+    setTimeout(() => marker.openPopup(), 50);
+  }
+}
+window.updateSingleMarkerAnomalyState = updateSingleMarkerAnomalyState;
+
 function applyAnomalyStylesToMarkers(anomalySet) {
   if (!outletMarkersMap) return;
 
-  outletMarkersMap.forEach((marker) => {
+  outletMarkersMap.forEach((marker, code) => {
     const item = marker.options.outletRef;
     if (!item) return;
 
-    const code = String(item.customer_number || item.id || '');
-    const isAnomaly = anomalySet.has(code);
+    const isSystem = anomalySet.has(code);
+    const isManual = window.manualAnomalySet && window.manualAnomalySet.has(code);
+    const isAnomaly = isSystem || isManual;
     const kecName = Array.isArray(item.kecamatan) ? item.kecamatan[0] : (item.kecamatan || '-');
 
     if (isAnomaly) {
@@ -263,6 +310,45 @@ function applyAnomalyStylesToMarkers(anomalySet) {
   });
 }
 
+function clearAnomalyAudit() {
+  if (anomalyLayerGroup) {
+    anomalyLayerGroup.clearLayers();
+  }
+  
+  if (window.lastAnomalySet) {
+    window.lastAnomalySet.clear();
+  }
+
+  if (outletMarkersMap) {
+    outletMarkersMap.forEach((marker, code) => {
+      const item = marker.options.outletRef;
+      if (!item) return;
+
+      const isManual = window.manualAnomalySet && window.manualAnomalySet.has(code);
+      const kecName = Array.isArray(item.kecamatan) ? item.kecamatan[0] : (item.kecamatan || '-');
+
+      if (isManual) {
+        marker.setStyle({
+          color: '#ef4444',
+          fillColor: '#000000',
+          radius: 9,
+          weight: 3.0,
+          fillOpacity: 1.0
+        });
+      } else {
+        marker.setStyle({
+          color: '#ffffff',
+          fillColor: getKecamatanColor(kecName),
+          radius: 6,
+          weight: 1.2,
+          fillOpacity: 0.95
+        });
+      }
+    });
+  }
+}
+window.clearAnomalyAudit = clearAnomalyAudit;
+
 function highlightAnomalyMarkers(anomalyList) {
   if (!map) initMap();
   if (!map || !anomalyLayerGroup) return;
@@ -281,7 +367,7 @@ function highlightAnomalyMarkers(anomalyList) {
     const o = item.outlet;
     const lat = parseFloat(o.lat ?? o.latitude);
     const lng = parseFloat(o.lng ?? o.longitude);
-    const custCode = o.customer_number || o.id || '-';
+    const custCode = String(o.customer_number || o.id || '-');
 
     if (isNaN(lat) || isNaN(lng) || (lat === 0 && lng === 0)) return;
 
@@ -356,14 +442,14 @@ function drawBufferZone(lat, lng, radiusInMeters) {
   if (!lat || !lng || radiusInMeters <= 0) return;
 
   const circle = L.circle([lat, lng], {
-    pane: 'bufferPane', // DILETAKKAN DI BUFFER PANE DI BAWAH MARKER
+    pane: 'bufferPane',
     radius: radiusInMeters,
     color: '#10b981',
     fillColor: '#10b981',
     fillOpacity: 0.15,
     weight: 2,
     dashArray: '5, 5',
-    interactive: false // MEMATIKAN INTERAKSI DARI BUFFER
+    interactive: false
   });
 
   bufferLayerGroup.addLayer(circle);

@@ -1,6 +1,5 @@
 /* ==============================================================================
-   SpotRevenue Application Controller v2.7
-   Features: Zero-Lock Buffer Analysis, Smooth Search & Direct Outlet Switch
+   SpotRevenue Application Controller v3.0 (Optimized Targeted Manual Anomaly)
    Lead Developer: Urai Ikhsan Fadhilah
    ============================================================================== */
 
@@ -111,19 +110,48 @@ window.manualAnomalySet = manualAnomalySet;
 const lastAnomalySet = new Set();
 window.lastAnomalySet = lastAnomalySet;
 
+/* FUNGSI PENANDAAN MANUAL YANG RINGAN & TARGETED (TIDAK MEMBUAT LEMOT) */
 function toggleManualAnomaly(custCode) {
   if (!custCode) return;
   const key = String(custCode);
 
+  let targetOutlet = null;
+  for (const o of activeOutletData) {
+    if (String(o.customer_number || o.id) === key) {
+      targetOutlet = o;
+      break;
+    }
+  }
+
   if (manualAnomalySet.has(key)) {
     manualAnomalySet.delete(key);
+    lastAnomalySet.delete(key);
     showToast(`🟢 Anomali dilepas untuk outlet: ${key}`);
   } else {
     manualAnomalySet.add(key);
-    showToast(`⚫ Outlet [${key}] ditandai sebagai ANOMALI MANUAL!`);
+    lastAnomalySet.add(key);
+    showToast(`⚫ Outlet [${key}] ditandai sebagai ANOMALI MANUAL Abah!`);
+
+    if (targetOutlet) {
+      const existsInList = lastAnomalyList.some(item => String(item.outlet.customer_number || item.outlet.id) === key);
+      if (!existsInList) {
+        lastAnomalyList.push({ outlet: targetOutlet, reason: "Ditandai Manual oleh Abah" });
+      }
+    }
   }
 
-  runCoordinateAnomalyAudit();
+  // Update marker spesifik di peta secara instan tanpa render ulang seluruh halaman
+  if (typeof window.updateSingleMarkerAnomalyState === 'function') {
+    window.updateSingleMarkerAnomalyState(key, manualAnomalySet.has(key));
+  }
+
+  // Update panel detail jika toko tersebut sedang dipilih
+  if (selectedOutlet && String(selectedOutlet.customer_number || selectedOutlet.id) === key) {
+    showOutletDetail(selectedOutlet, false);
+  }
+
+  // Update list kotak hasil audit secara real-time
+  updateAnomalyResultUI();
 }
 window.toggleManualAnomaly = toggleManualAnomaly;
 
@@ -159,7 +187,7 @@ function setupAuthListeners() {
     if ((isUserValid && isPassValid) || passVal === '2026' || passVal === 'spotrev2026') {
       sessionStorage.setItem('spotrevenue_auth', 'true');
       if (authModal) authModal.style.display = 'none';
-      showToast('🔓 Akses Diberikan, Selamat Bekerja!');
+      showToast('🔓 Akses Diberikan, Selamat Bekerja Abah!');
       if (typeof window.openFullDashboard === 'function') {
         window.openFullDashboard();
       }
@@ -321,6 +349,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   const btnAudit = document.getElementById('btn-run-anomaly-audit');
   if (btnAudit) {
     btnAudit.addEventListener('click', runCoordinateAnomalyAudit);
+  }
+
+  const btnStopAudit = document.getElementById('btn-stop-anomaly-audit');
+  if (btnStopAudit) {
+    btnStopAudit.addEventListener('click', stopCoordinateAnomalyAudit);
   }
 
   const btnExportExcel = document.getElementById('btn-export-anomaly-excel');
@@ -1227,111 +1260,182 @@ function checkCannibalizationRisk() {
 function runCoordinateAnomalyAudit() {
   const resultContainer = document.getElementById('anomaly-audit-results');
   const btnExport = document.getElementById('btn-export-anomaly-excel');
+  const btnStop = document.getElementById('btn-stop-anomaly-audit');
+  const btnAudit = document.getElementById('btn-run-anomaly-audit');
   if (!resultContainer) return;
 
-  showToast("🔍 Menganalisis anomali geospasial & batas lautan seluruh toko...");
+  const scopeEl = document.getElementById('select-audit-scope');
+  const typeEl = document.getElementById('select-audit-type');
 
-  const sourceData = activeOutletData;
+  const auditScope = scopeEl ? scopeEl.value : 'filtered';
+  const auditType = typeEl ? typeEl.value : 'all';
+
+  const sourceData = (auditScope === 'filtered' && window.lastFilteredOutlets && window.lastFilteredOutlets.length > 0)
+                     ? window.lastFilteredOutlets
+                     : activeOutletData;
+
   if (!sourceData || sourceData.length === 0) {
-    resultContainer.innerHTML = `<div style="color: #64748b; font-size: 12px; padding: 10px;">Belum ada data toko terimpor.</div>`;
+    resultContainer.innerHTML = `<div style="color: #64748b; font-size: 12px; padding: 10px;">Belum ada data toko terimpor atau terfilter.</div>`;
     if (btnExport) btnExport.style.display = 'none';
+    if (btnStop) btnStop.style.display = 'none';
     return;
   }
 
+  if (btnAudit) {
+    btnAudit.disabled = true;
+    btnAudit.innerHTML = `⏳ Memproses Audit (0%)...`;
+  }
+
+  resultContainer.innerHTML = `
+    <div style="padding: 12px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 12px; color: #334155;">
+      🔄 <b>Menjalankan Audit Asinkron...</b>
+      <div style="width: 100%; background: #e2e8f0; height: 8px; border-radius: 4px; margin-top: 8px; overflow: hidden;">
+        <div id="audit-progress-bar" style="width: 0%; height: 100%; background: #10b981; transition: width 0.1s;"></div>
+      </div>
+    </div>
+  `;
+
   const anomalyList = [];
-  lastAnomalySet.clear();
+  const processedCodes = new Set();
 
-  sourceData.forEach(o => {
-    const lat = parseFloat(o.lat ?? o.latitude);
-    const lng = parseFloat(o.lng ?? o.longitude);
-    const kodyaKey = o.kodya || '';
-    const custCode = String(o.customer_number || o.id || '');
-
-    if (manualAnomalySet.has(custCode)) {
-      anomalyList.push({ outlet: o, reason: "Ditandai Manual oleh User" });
-      lastAnomalySet.add(custCode);
-      return;
-    }
-
-    if (isNaN(lat) || isNaN(lng) || (lat === 0 && lng === 0)) {
-      anomalyList.push({ outlet: o, reason: "Koordinat Kosong / Nol (0,0)" });
-      lastAnomalySet.add(custCode);
-      return;
-    }
-
-    if (lat < -11.0 || lat > 6.0 || lng < 95.0 || lng > 141.0) {
-      anomalyList.push({ outlet: o, reason: `Di luar wilayah Indonesia (${lat.toFixed(4)}, ${lng.toFixed(4)})` });
-      lastAnomalySet.add(custCode);
-      return;
-    }
-
-    if (lng < 108.95) {
-      anomalyList.push({ outlet: o, reason: `Terdeteksi di area Laut Natuna / Selat Karimata (${lat.toFixed(4)}, ${lng.toFixed(4)})` });
-      lastAnomalySet.add(custCode);
-      return;
-    }
-
-    if (kodyaKey === 'PTK' && (lng < 109.24 || lng > 109.42 || lat < -0.09 || lat > 0.05)) {
-      anomalyList.push({ outlet: o, reason: `Di Luar Wilayah Kota Pontianak / Lautan Pesisir (${lat.toFixed(4)}, ${lng.toFixed(4)})` });
-      lastAnomalySet.add(custCode);
-      return;
-    }
-
-    if (kodyaKey === 'SKW' && (lng < 108.94 || lng > 109.12)) {
-      anomalyList.push({ outlet: o, reason: `Pesisir Laut Singkawang (${lat.toFixed(4)}, ${lng.toFixed(4)})` });
-      lastAnomalySet.add(custCode);
-      return;
-    }
-
-    const maxAllowedKm = KODYA_MAX_DIST_KM[kodyaKey] || 50;
-    if (kodyaKey && KODYA_CENTERS[kodyaKey]) {
-      const center = KODYA_CENTERS[kodyaKey];
-      const distKm = getDistanceInMeters(lat, lng, center[0], center[1]) / 1000;
-      if (distKm > maxAllowedKm) {
-        anomalyList.push({ outlet: o, reason: `Penyimpangan Jarak (${Math.round(distKm)} km dari ${KODYA_MAP[kodyaKey] || kodyaKey})` });
-        lastAnomalySet.add(custCode);
-        return;
-      }
+  // Masukkan manual anomaly yang sudah dipilih Abah sebelumnya
+  manualAnomalySet.forEach(custCode => {
+    const found = sourceData.find(o => String(o.customer_number || o.id) === String(custCode));
+    if (found) {
+      anomalyList.push({ outlet: found, reason: "Ditandai Manual oleh Abah" });
+      processedCodes.add(String(custCode));
+      lastAnomalySet.add(String(custCode));
     }
   });
 
-  lastAnomalyList = anomalyList;
+  let index = 0;
+  const total = sourceData.length;
+  const batchSize = 150;
 
-  if (typeof window.applyAnomalyStylesToMarkers === 'function') {
-    window.applyAnomalyStylesToMarkers(lastAnomalySet);
+  function processBatch() {
+    const end = Math.min(index + batchSize, total);
+
+    for (let i = index; i < end; i++) {
+      const o = sourceData[i];
+      const custCode = String(o.customer_number || o.id || '');
+      if (processedCodes.has(custCode)) continue;
+
+      const lat = parseFloat(o.lat ?? o.latitude);
+      const lng = parseFloat(o.lng ?? o.longitude);
+      const kodyaKey = o.kodya || '';
+
+      const isZeroCoord = isNaN(lat) || isNaN(lng) || (lat === 0 && lng === 0);
+      if (isZeroCoord) {
+        if (auditType === 'all' || auditType === 'zero') {
+          anomalyList.push({ outlet: o, reason: "Koordinat Kosong / Nol (0,0)" });
+          lastAnomalySet.add(custCode);
+        }
+        continue;
+      }
+
+      const isOcean = (lat < -11.0 || lat > 6.0 || lng < 95.0 || lng > 141.0 || lng < 108.95) ||
+                      (kodyaKey === 'PTK' && (lng < 109.24 || lng > 109.42 || lat < -0.09 || lat > 0.05)) ||
+                      (kodyaKey === 'SKW' && (lng < 108.94 || lng > 109.12));
+
+      if (isOcean) {
+        if (auditType === 'all' || auditType === 'ocean') {
+          anomalyList.push({ outlet: o, reason: `Terdeteksi di Area Laut / Pesisir (${lat.toFixed(4)}, ${lng.toFixed(4)})` });
+          lastAnomalySet.add(custCode);
+        }
+        continue;
+      }
+
+      const maxAllowedKm = KODYA_MAX_DIST_KM[kodyaKey] || 50;
+      if (kodyaKey && KODYA_CENTERS[kodyaKey]) {
+        const center = KODYA_CENTERS[kodyaKey];
+        const distKm = getDistanceInMeters(lat, lng, center[0], center[1]) / 1000;
+        if (distKm > maxAllowedKm) {
+          if (auditType === 'all' || auditType === 'dist') {
+            anomalyList.push({ outlet: o, reason: `Penyimpangan Jarak (${Math.round(distKm)} km dari ${KODYA_MAP[kodyaKey] || kodyaKey})` });
+            lastAnomalySet.add(custCode);
+          }
+          continue;
+        }
+      }
+    }
+
+    index = end;
+    const pct = Math.round((index / total) * 100);
+
+    const progressBar = document.getElementById('audit-progress-bar');
+    if (progressBar) progressBar.style.width = `${pct}%`;
+    if (btnAudit) btnAudit.innerHTML = `⏳ Memproses Audit (${pct}%)...`;
+
+    if (index < total) {
+      setTimeout(processBatch, 0);
+    } else {
+      finishAudit();
+    }
   }
 
-  if (typeof window.highlightAnomalyMarkers === 'function') {
-    window.highlightAnomalyMarkers(anomalyList);
+  function finishAudit() {
+    if (btnAudit) {
+      btnAudit.disabled = false;
+      btnAudit.style.background = '#059669';
+      btnAudit.innerHTML = `🔄 Audit Ulang`;
+    }
+
+    if (btnStop) {
+      btnStop.style.display = 'inline-flex';
+    }
+
+    lastAnomalyList = anomalyList;
+
+    if (typeof window.applyAnomalyStylesToMarkers === 'function') {
+      window.applyAnomalyStylesToMarkers(lastAnomalySet);
+    }
+
+    if (typeof window.highlightAnomalyMarkers === 'function') {
+      window.highlightAnomalyMarkers(anomalyList);
+    }
+
+    updateAnomalyResultUI();
+    showToast(`⚠️ Audit Selesai Abah! ${anomalyList.length} toko anomali terdeteksi.`);
   }
 
-  if (anomalyList.length === 0) {
+  processBatch();
+}
+
+function updateAnomalyResultUI() {
+  const resultContainer = document.getElementById('anomaly-audit-results');
+  const btnExport = document.getElementById('btn-export-anomaly-excel');
+  const btnStop = document.getElementById('btn-stop-anomaly-audit');
+  if (!resultContainer) return;
+
+  if (!lastAnomalyList || lastAnomalyList.length === 0) {
     resultContainer.innerHTML = `
       <div style="background: #f0fdf4; border: 1px solid #86efac; color: #166534; padding: 12px; border-radius: 8px; font-size: 12px;">
-        ✅ <b>Audit Selesai:</b> Seluruh lokasi toko valid dan berada dalam batas daratan yang sesuai!
+        ✅ <b>Audit Selesai:</b> Tidak ada anomali terdeteksi!
       </div>
     `;
     if (btnExport) btnExport.style.display = 'none';
-    showToast("✅ Audit Selesai: Tidak ada anomali terdeteksi!");
     return;
   }
 
   if (btnExport) btnExport.style.display = 'inline-flex';
+  if (btnStop) btnStop.style.display = 'inline-flex';
 
   let html = `
     <div style="background: #fef2f2; border: 1px solid #fca5a5; color: #991b1b; padding: 10px; border-radius: 8px; font-size: 12px; font-weight: 700; margin-bottom: 10px;">
-      ⚠️ Terdeteksi ${anomalyList.length} Toko Anomali (Titik Hitam Menyala)
+      ⚠️ Terdeteksi ${lastAnomalyList.length} Toko Anomali
     </div>
   `;
 
-  anomalyList.forEach(item => {
+  lastAnomalyList.forEach(item => {
     const o = item.outlet;
     const code = o.customer_number || o.id || '-';
+    const isManual = manualAnomalySet.has(String(code));
+    
     html += `
       <div class="anomaly-item" data-id="${o.id || o.customer_number}" style="display: flex; justify-content: space-between; align-items: center; padding: 8px; border-bottom: 1px solid #e2e8f0; cursor: pointer;">
         <div>
           <div style="font-weight: 700; color: #1e293b; font-size: 12px;">${o.name} (${code})</div>
-          <div style="font-size: 11px; color: #dc2626; font-weight: 700; margin-top: 2px;">⚠️ ${item.reason}</div>
+          <div style="font-size: 11px; color: ${isManual ? '#059669' : '#dc2626'}; font-weight: 700; margin-top: 2px;">⚠️ ${item.reason}</div>
           <div style="font-size: 10px; color: #64748b; margin-top: 2px;">Kec: ${o.kecamatan || '-'} | Kab: ${KODYA_MAP[o.kodya] || o.kodya || '-'}</div>
         </div>
         <button onclick="event.stopPropagation(); window.toggleManualAnomaly('${code}')" style="background: #ef4444; color: white; border: none; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight:600; cursor: pointer;">
@@ -1347,15 +1451,49 @@ function runCoordinateAnomalyAudit() {
   items.forEach(el => {
     el.addEventListener('click', () => {
       const outletId = el.getAttribute('data-id');
-      const target = sourceData.find(o => String(o.id) === String(outletId) || String(o.customer_number) === String(outletId));
+      const target = activeOutletData.find(o => String(o.id) === String(outletId) || String(o.customer_number) === String(outletId));
       if (target) {
         showOutletDetail(target, false);
       }
     });
   });
-
-  showToast(`⚠️ Audit selesai! ${anomalyList.length} toko anomali telah berubah warna menjadi HITAM.`);
 }
+
+function stopCoordinateAnomalyAudit() {
+  if (typeof window.clearAnomalyAudit === 'function') {
+    window.clearAnomalyAudit();
+  }
+
+  lastAnomalyList = [];
+
+  const resultContainer = document.getElementById('anomaly-audit-results');
+  const btnExport = document.getElementById('btn-export-anomaly-excel');
+  const btnStop = document.getElementById('btn-stop-anomaly-audit');
+  const btnRun = document.getElementById('btn-run-anomaly-audit');
+
+  if (resultContainer) {
+    resultContainer.innerHTML = `
+      <div style="background: #f8fafc; border: 1px solid #cbd5e1; color: #475569; padding: 10px; border-radius: 8px; font-size: 11px; text-align: center;">
+        ⚪ Mode Audit Anomali Dinonaktifkan. Peta kembali berjalan normal dan ringan.
+      </div>
+    `;
+  }
+
+  if (btnExport) btnExport.style.display = 'none';
+  if (btnStop) btnStop.style.display = 'none';
+  if (btnRun) {
+    btnRun.disabled = false;
+    btnRun.style.background = '#000000';
+    btnRun.innerHTML = `
+      <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      Jalankan Audit Anomali
+    `;
+  }
+
+  showToast("🛑 Audit Anomali Dimatikan Abah. Performa kembali optimal!");
+}
+
+window.stopCoordinateAnomalyAudit = stopCoordinateAnomalyAudit;
 
 function exportAnomalyToExcel() {
   if (!lastAnomalyList || lastAnomalyList.length === 0) {
@@ -1388,7 +1526,7 @@ function exportAnomalyToExcel() {
   link.click();
   document.body.removeChild(link);
 
-  showToast("📥 File Audit Anomali berhasil di-download! Silakan buka di Excel.");
+  showToast("📥 File Audit Anomali berhasil di-download Abah!");
 }
 
 function showOutletDetail(outlet, autoSwitchTab = false) {
