@@ -17,9 +17,25 @@
   <!-- Chart.js untuk Grafik Interaktif Dashboard -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
+  <!-- Stylesheet Utama -->
   <link rel="stylesheet" href="css/styles.css">
 
   <style>
+    /* ==============================================================================
+       DIRECT EMBEDDED PATCH V4.3 (LEBAR SIDEBAR 350PX & STYLING MODUL OPTIMAL)
+       ============================================================================== */
+    
+    /* Paksa Lebar Sidebar saat Terbuka atau Dikunci menjadi 350px */
+    #sidebar,
+    #sidebar.sidebar-expanded,
+    #sidebar.pinned {
+      width: 350px !important;
+      min-width: 350px !important;
+      max-width: 90vw !important;
+      transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s ease !important;
+    }
+
+    /* Fullscreen Dashboard (Default Terbuka Tampil di Awal) */
     #fullscreen-dashboard {
       position: fixed;
       inset: 0;
@@ -27,7 +43,7 @@
       background: #081812;
       color: #f8fafc;
       overflow-y: auto;
-      display: none;
+      display: flex; /* Default terbuka saat refresh */
       flex-direction: column;
       font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
       padding: 24px 32px;
@@ -269,46 +285,39 @@
     }
     .suggestion-item:last-child { border-bottom: none; }
 
-    /* ANIMASI SINAR HITAM MENYALA (PULSING BLACK BEACON) UNTUK OUTLET ANOMALI */
-    @keyframes pulse-black-beacon {
-      0% {
-        box-shadow: 0 0 0 0 rgba(0, 0, 0, 0.95);
-        transform: scale(0.9);
-      }
-      70% {
-        box-shadow: 0 0 0 18px rgba(0, 0, 0, 0);
-        transform: scale(1.3);
-      }
-      100% {
-        box-shadow: 0 0 0 0 rgba(0, 0, 0, 0);
-        transform: scale(0.9);
-      }
-    }
-
-    .pulsing-black-beacon-icon {
-      background-color: #000000 !important;
-      border: 2px solid #ffffff !important;
-      border-radius: 50% !important;
-      width: 18px !important;
-      height: 18px !important;
-      animation: pulse-black-beacon 1.2s infinite ease-in-out !important;
-      cursor: pointer !important;
-      z-index: 9999 !important;
-    }
-
-    .anomaly-item {
-      padding: 10px 12px;
-      background: #f8fafc;
-      border: 1px solid #cbd5e1;
-      border-radius: 8px;
-      margin-bottom: 8px;
+    /* ITEM RUTE LIST */
+    .route-item-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 10px;
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      margin-bottom: 6px;
       cursor: pointer;
       transition: all 0.2s ease;
     }
-    .anomaly-item:hover {
-      background: #f1f5f9;
-      transform: translateX(3px);
-      border-color: #000000;
+    .route-item-row:hover {
+      border-color: #0284c7;
+      background: #f0f9ff;
+      transform: translateX(2px);
+    }
+    .route-badge-start {
+      background: #10b981;
+      color: #ffffff;
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+    .route-badge-step {
+      background: #0284c7;
+      color: #ffffff;
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 4px;
     }
   </style>
 </head>
@@ -347,7 +356,7 @@
     <div id="search-suggestions" class="search-suggestions-list"></div>
   </div>
 
-  <!-- DASHBOARD FULL SCREEN OVERLAY -->
+  <!-- DASHBOARD FULL SCREEN OVERLAY (HALAMAN UTAMA/LANDING PAGE) -->
   <div id="fullscreen-dashboard" class="dash-animated">
     <header class="dash-header">
       <div class="dash-header-top">
@@ -516,7 +525,7 @@
     </div>
 
     <footer style="margin-top: auto; padding-top: 18px; border-top: 1px solid rgba(255,255,255,0.08); display: flex; align-items: center; justify-content: space-between; font-size: 11px; color: #64748b;">
-      <div>SpotRevenue Enterprise Location & Revenue Intelligence v3.2</div>
+      <div>SpotRevenue Enterprise Location & Revenue Intelligence v4.3</div>
       <div>Lead Developer: <b style="color: #a7f3d0; font-weight: 600;">Urai Ikhsan Fadhilah</b></div>
     </footer>
   </div>
@@ -538,7 +547,8 @@
     </span>
   </div>
 
-  <aside id="sidebar" class="sidebar-collapsed">
+  <!-- SIDEBAR UTAMA SPOTREVENUE -->
+  <aside id="sidebar" class="pinned sidebar-expanded">
     
     <header class="header">
       <div class="header-top">
@@ -554,12 +564,13 @@
     </header>
 
     <div class="module-nav-grid" style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px;">
-      <button class="btn-module-nav active" id="btn-nav-dash-open" title="Buka Fullscreen Dashboard">
+      <button class="btn-module-nav" id="btn-nav-dash-open" title="Buka Fullscreen Dashboard">
         <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>
         <span>Dash</span>
       </button>
 
-      <button class="btn-module-nav" data-modul="modul-data" title="Data Master">
+      <!-- DEFAULT TAB SIDEBAR: DATA MASTER -->
+      <button class="btn-module-nav active" data-modul="modul-data" title="Data Master">
         <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
         <span>Data</span>
       </button>
@@ -574,7 +585,6 @@
         <span>Spasial</span>
       </button>
 
-      <!-- MODUL INTELIJEN REAL-TIME -->
       <button class="btn-module-nav btn-highlight-idea" data-modul="modul-intelijen" title="Intelijen Spasial & Eksekutif">
         <svg class="nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4"/><path d="M12 18v4"/><path d="M4.93 4.93l2.83 2.83"/><path d="M16.24 16.24l2.83 2.83"/><path d="M2 12h4"/><path d="M18 12h4"/><path d="M4.93 19.07l2.83-2.83"/><path d="M16.24 7.76l2.83-2.83"/><circle cx="12" cy="12" r="4"/></svg>
         <span>Intelijen</span>
@@ -593,7 +603,7 @@
 
     <div class="sidebar-scroll-content" style="-ms-overflow-style: none; scrollbar-width: none;">
 
-      <!-- MODUL 1: DATA MASTER -->
+      <!-- MODUL 1: DATA MASTER (DEFAULT ACTIVE PANE) -->
       <div id="modul-data" class="module-content-pane active">
         <section class="section-card metric-card">
           <h3 class="section-title">Metrik Tampilan Peta</h3>
@@ -776,13 +786,13 @@
         <section class="section-card" style="margin-top: 14px;">
           <h3 class="section-title">
             <svg class="card-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-            Evaluasi Tumpang Tindih Wilayah
+            Evaluasi Coverage Gap & Potensi Wilayah
           </h3>
-          <p class="text-sub">Deteksi otomatis keterdekatan lokasi toko (&lt; 500m) untuk optimalisasi distribusi teritorial:</p>
+          <p class="text-sub">Menganalisis sebaran dan kontribusi omset antar kecamatan terfilter:</p>
 
           <button id="btn-check-cannibalization" style="width: 100%; background: #d97706; color: white; border: none; padding: 10px; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; margin-top: 10px; display: flex; align-items: center; justify-content: center; gap: 6px;">
             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-            Evaluasi Tumpang Tindih Outlet (&lt; 500m)
+            🔍 Analisis Coverage Gap & Potensi Wilayah
           </button>
         </section>
 
@@ -855,87 +865,99 @@
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
             Executive Summary Engine
           </div>
-          <button id="btn-generate-ai-summary" class="btn-action-primary">
+          <button id="btn-generate-ai-summary" class="btn-action-primary" style="width: 100%; background: #10b981; color: white; border: none; padding: 10px; border-radius: 8px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.85.83 6.72 2.24"/><polyline points="21 3 21 9 15 9"/></svg>
             Perbarui Insight Real-Time
           </button>
-          <div id="ai-summary-output" class="summary-box-output">
+          <div id="ai-summary-output" class="summary-box-output" style="margin-top: 8px; font-size: 11px; color: #64748b;">
             <span class="placeholder-text">Analisis sedang memuat data terfilter...</span>
           </div>
         </div>
 
         <!-- FITUR 2: BCG MATRIX / KUADRAN PERFORMANCE TOKO -->
-        <div class="section-card">
+        <div class="section-card" style="margin-top: 12px;">
           <div class="section-title">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="12" y1="3" x2="12" y2="21"/><line x1="3" y1="12" x2="21" y2="12"/></svg>
             Matriks Kuadran Performa Toko
           </div>
-          <div class="bcg-matrix-grid">
-            <div class="bcg-quad star">
-              <div class="quad-header">
+          <div class="bcg-matrix-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px;">
+            <div class="bcg-quad star" style="background: rgba(245, 158, 11, 0.1); padding: 8px; border-radius: 6px; border: 1px solid rgba(245, 158, 11, 0.3);">
+              <div class="quad-header" style="font-size: 11px; font-weight: 700; color: #d97706; display: flex; align-items: center; gap: 4px;">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
                 Star Outlets
               </div>
-              <div id="quad-star-count" class="quad-value">0 Toko</div>
-              <div class="quad-desc">Omset Tinggi &amp; Rutin Belanja</div>
+              <div id="quad-star-count" class="quad-value" style="font-size: 16px; font-weight: 800; color: #b45309; margin-top: 2px;">0 Toko</div>
+              <div class="quad-desc" style="font-size: 9.5px; color: #78350f;">Omset Tinggi &amp; Rutin Belanja</div>
             </div>
-            <div class="bcg-quad cow">
-              <div class="quad-header">
+
+            <div class="bcg-quad cow" style="background: rgba(16, 185, 129, 0.1); padding: 8px; border-radius: 6px; border: 1px solid rgba(16, 185, 129, 0.3);">
+              <div class="quad-header" style="font-size: 11px; font-weight: 700; color: #059669; display: flex; align-items: center; gap: 4px;">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><line x1="12" y1="18" x2="12" y2="6"/></svg>
                 Cash Cows
               </div>
-              <div id="quad-cow-count" class="quad-value">0 Toko</div>
-              <div class="quad-desc">Omset Tinggi &amp; Belanja Pasif</div>
+              <div id="quad-cow-count" class="quad-value" style="font-size: 16px; font-weight: 800; color: #047857; margin-top: 2px;">0 Toko</div>
+              <div class="quad-desc" style="font-size: 9.5px; color: #064e3b;">Omset Tinggi &amp; Belanja Pasif</div>
             </div>
-            <div class="bcg-quad question">
-              <div class="quad-header">
+
+            <div class="bcg-quad question" style="background: rgba(59, 130, 246, 0.1); padding: 8px; border-radius: 6px; border: 1px solid rgba(59, 130, 246, 0.3);">
+              <div class="quad-header" style="font-size: 11px; font-weight: 700; color: #2563eb; display: flex; align-items: center; gap: 4px;">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
                 Potensial
               </div>
-              <div id="quad-question-count" class="quad-value">0 Toko</div>
-              <div class="quad-desc">Omset Rendah &amp; Rutin Belanja</div>
+              <div id="quad-question-count" class="quad-value" style="font-size: 16px; font-weight: 800; color: #1d4ed8; margin-top: 2px;">0 Toko</div>
+              <div class="quad-desc" style="font-size: 9.5px; color: #1e3a8a;">Omset Rendah &amp; Rutin Belanja</div>
             </div>
-            <div class="bcg-quad risk">
-              <div class="quad-header">
+
+            <div class="bcg-quad risk" style="background: rgba(239, 68, 68, 0.1); padding: 8px; border-radius: 6px; border: 1px solid rgba(239, 68, 68, 0.3);">
+              <div class="quad-header" style="font-size: 11px; font-weight: 700; color: #dc2626; display: flex; align-items: center; gap: 4px;">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
                 Underperform
               </div>
-              <div id="quad-risk-count" class="quad-value">0 Toko</div>
-              <div class="quad-desc">Omset Rendah &amp; Jarang Belanja</div>
+              <div id="quad-risk-count" class="quad-value" style="font-size: 16px; font-weight: 800; color: #b91c1c; margin-top: 2px;">0 Toko</div>
+              <div class="quad-desc" style="font-size: 9.5px; color: #7f1d1d;">Omset Rendah &amp; Jarang Belanja</div>
             </div>
           </div>
         </div>
 
-        <!-- FITUR 3: OPTIMASI RUTE SALEMAN -->
-        <div class="section-card">
+        <!-- FITUR UTAMA: OPTIMASI RUTE TOP OUTLET TERDEKAT -->
+        <div class="section-card" style="margin-top: 12px;">
           <div class="section-title">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>
-            Optimasi Rute Kunjungan Field Sales
+            Optimasi Rute Kunjungan Top Outlet Terdekat
           </div>
-          <div style="display: flex; gap: 8px; margin-bottom: 8px;">
-            <select id="select-route-limit" class="form-control" title="Batas Jumlah Toko Rute" aria-label="Batas Jumlah Toko Rute" style="padding: 6px;">
-              <option value="5">Top 5 Toko Terdekat</option>
-              <option value="10" selected>Top 10 Toko Terdekat</option>
-              <option value="15">Top 15 Toko Terdekat</option>
+          <p class="text-sub" style="color: #64748b; font-size: 11px; margin-bottom: 10px; margin-top: 4px;">
+            Klik salah satu toko di peta sebagai acuan awal, lalu sistem akan mengurutkan toko-toko terdekat secara instan.
+          </p>
+
+          <div style="margin-bottom: 10px;">
+            <label style="font-size: 10.5px; color: #64748b; font-weight: 600; display: block; margin-bottom: 4px;">Batas Target Outlet Terdekat:</label>
+            <select id="select-route-limit" class="form-control" title="Batas Jumlah Toko Rute" aria-label="Batas Jumlah Toko Rute" style="padding: 6px; width: 100%;">
+              <option value="5">Top 5 Outlet Terdekat</option>
+              <option value="10" selected>Top 10 Outlet Terdekat</option>
+              <option value="15">Top 15 Outlet Terdekat</option>
+              <option value="20">Top 20 Outlet Terdekat</option>
+              <option value="25">Top 25 Outlet Terdekat</option>
             </select>
-            <button id="btn-generate-route" class="btn-action-secondary">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
-              Hitung Rute
-            </button>
           </div>
-          <div id="route-steps-container" class="route-steps-box">
-            <span class="placeholder-text">Pilih toko utama pada peta, lalu klik "Hitung Rute" untuk membuat rute efisien.</span>
+
+          <button id="btn-generate-route" style="width: 100%; background: #0284c7; color: white; border: none; padding: 11px; border-radius: 8px; font-weight: 700; font-size: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: background 0.2s ease;" onmouseover="this.style.background='#0369a1';" onmouseout="this.style.background='#0284c7';">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>
+            🎯 Hitung & Tampilkan Top Outlet Terdekat
+          </button>
+
+          <div id="route-steps-container" class="route-steps-box" style="margin-top: 10px; padding: 10px; background: rgba(0,0,0,0.03); border: 1px dashed #cbd5e1; border-radius: 8px; font-size: 11px; max-height: 250px; overflow-y: auto;">
+            <span class="placeholder-text" style="color: #64748b;">Petunjuk: Klik salah satu toko pada peta, lalu tekan tombol "Hitung & Tampilkan Top Outlet Terdekat".</span>
           </div>
         </div>
 
-        <!-- FITUR 4 & 5: EXPORT REPORT PDF & PWA STATUS -->
-        <div class="section-card">
+        <!-- FITUR PRINT REPORT PDF & PWA STATUS -->
+        <div class="section-card" style="margin-top: 12px;">
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-            <button id="btn-print-pdf-report" class="btn-action-dark">
+            <button id="btn-print-pdf-report" style="background: #1e293b; color: white; border: none; padding: 10px; border-radius: 8px; font-weight: 700; font-size: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
               Cetak PDF
             </button>
-            <div id="pwa-status-badge" class="pwa-badge">
+            <div id="pwa-status-badge" style="background: rgba(16, 185, 129, 0.15); color: #047857; padding: 10px; border-radius: 8px; font-weight: 700; font-size: 11px; display: flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid rgba(16, 185, 129, 0.3);">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>
               <span id="pwa-status-text">PWA: Ready</span>
             </div>
@@ -1019,37 +1041,46 @@
     </div>
 
     <footer class="sidebar-footer">
-      <div class="footer-system">SpotRevenue System v3.2</div>
+      <div class="footer-system">SpotRevenue System v4.3</div>
       <div class="footer-dev">Developer: <b>Urai Ikhsan Fadhilah</b></div>
     </footer>
   </aside>
 
   <main id="map"></main>
 
+  <!-- DATABASE & MAP CONTROLLER -->
   <script src="js/db.js"></script>
   <script src="js/map.js"></script>
+
+  <!-- MAIN APP CONTROLLER -->
   <script src="js/app.js"></script>
 
+  <!-- EVENT HANDLER PENAMBUNG MODUL & KONTROL FULL INTERAKSI -->
   <script>
     document.addEventListener('DOMContentLoaded', () => {
-      const fullDash = document.getElementById('fullscreen-dashboard');
-      const btnNavDash = document.getElementById('btn-nav-dash-open');
-      const btnCloseDash = document.getElementById('btn-close-dashboard');
-
+      // 1. OTOMATIS BUKA FULLSCREEN DASHBOARD SAAT REFRESH
       window.openFullDashboard = function() {
+        const fullDash = document.getElementById('fullscreen-dashboard');
         if (fullDash) fullDash.style.display = 'flex';
-        if (typeof updateDashboardAnalytics === 'function') {
-          updateDashboardAnalytics();
-        }
+        if (typeof updateDashboardAnalytics === 'function') updateDashboardAnalytics();
       };
 
       window.closeFullDashboard = function() {
+        const fullDash = document.getElementById('fullscreen-dashboard');
         if (fullDash) fullDash.style.display = 'none';
       };
+
+      // Jalankan pembukaan dashboard secara otomatis saat halaman dimuat
+      openFullDashboard();
+
+      const btnNavDash = document.getElementById('btn-nav-dash-open');
+      const btnCloseDash = document.getElementById('btn-close-dashboard');
 
       if (btnNavDash) btnNavDash.addEventListener('click', openFullDashboard);
       if (btnCloseDash) btnCloseDash.addEventListener('click', closeFullDashboard);
 
+      // 2. KONTROL HEADER DASHBOARD (TERKONEKSI FULL KE APP.JS)
+      // A. Select Tahun
       const dashSelectTahun = document.getElementById('dash-select-tahun');
       if (dashSelectTahun) {
         dashSelectTahun.addEventListener('change', (e) => {
@@ -1061,16 +1092,7 @@
         });
       }
 
-      const dashMonthPills = document.querySelectorAll('.dash-month-pill');
-      dashMonthPills.forEach(pill => {
-        pill.addEventListener('click', () => {
-          const m = pill.getAttribute('data-dash-month');
-          if (typeof toggleDashboardMonth === 'function') {
-            toggleDashboardMonth(m, pill);
-          }
-        });
-      });
-
+      // B. Mode Kalkulasi (TOTAL / AVERAGE)
       const dashCalcBtns = document.querySelectorAll('.dash-calc-btn');
       dashCalcBtns.forEach(btn => {
         btn.addEventListener('click', () => {
@@ -1084,6 +1106,7 @@
         });
       });
 
+      // C. Metrik Penjualan (VALUE / BOX / UOM)
       const dashMetricBtns = document.querySelectorAll('.dash-metric-btn');
       dashMetricBtns.forEach(btn => {
         btn.addEventListener('click', async () => {
@@ -1097,6 +1120,20 @@
         });
       });
 
+      // D. Pill Pilih Bulan (JAN - DEC)
+      const dashMonthPills = document.querySelectorAll('.dash-month-pill');
+      dashMonthPills.forEach(pill => {
+        pill.addEventListener('click', () => {
+          const m = pill.getAttribute('data-dash-month');
+          if (typeof toggleDashboardMonth === 'function') {
+            toggleDashboardMonth(m, pill);
+          } else {
+            pill.classList.toggle('active');
+          }
+        });
+      });
+
+      // E. Heatmap Peta
       const btnDashHeat = document.getElementById('btn-dash-toggle-heatmap');
       if (btnDashHeat) {
         btnDashHeat.addEventListener('click', () => {
@@ -1106,8 +1143,125 @@
         });
       }
 
-      if (sessionStorage.getItem('spotrevenue_auth') === 'true') {
-        openFullDashboard();
+      // F. Filter Kinerja Toko (Top Tier Pareto / Low Performer)
+      const perfBtns = document.querySelectorAll('.btn-perf-filter');
+      perfBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+          const perf = btn.getAttribute('data-perf');
+          if (typeof filterByPerformance === 'function') {
+            filterByPerformance(perf);
+          }
+        });
+      });
+
+      // 3. KONTROL TAB NAVIGASI SIDEBAR
+      const moduleBtns = document.querySelectorAll('.btn-module-nav[data-modul]');
+      const modulePanes = document.querySelectorAll('.module-content-pane');
+
+      moduleBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+          const targetId = btn.getAttribute('data-modul');
+          moduleBtns.forEach(b => b.classList.remove('active'));
+          modulePanes.forEach(p => p.classList.remove('active'));
+
+          btn.classList.add('active');
+          const targetPane = document.getElementById(targetId);
+          if (targetPane) targetPane.classList.add('active');
+        });
+      });
+
+      // 4. FITUR TOP OUTLET TERDEKAT (EKSEKUSI CEPAT)
+      const btnGenerateRoute = document.getElementById('btn-generate-route');
+      if (btnGenerateRoute) {
+        btnGenerateRoute.addEventListener('click', () => {
+          const originOutlet = window.selectedOutlet;
+          const container = document.getElementById('route-steps-container');
+
+          if (!originOutlet) {
+            alert("Silakan klik salah satu toko pada peta terlebih dahulu sebagai titik awal acuan!");
+            return;
+          }
+
+          const limitVal = parseInt(document.getElementById('select-route-limit')?.value || "10", 10);
+          const allOutlets = window.lastFilteredOutlets || window.activeOutletData || [];
+
+          if (!allOutlets || allOutlets.length === 0) {
+            container.innerHTML = `<div style="color: #ef4444; font-weight: 600;">Data toko belum dimuat atau kosong!</div>`;
+            return;
+          }
+
+          const oLat = parseFloat(originOutlet.lat || originOutlet.latitude);
+          const oLng = parseFloat(originOutlet.lng || originOutlet.longitude);
+
+          if (isNaN(oLat) || isNaN(oLng)) {
+            container.innerHTML = `<div style="color: #ef4444; font-weight: 600;">Koordinat toko acuan tidak valid!</div>`;
+            return;
+          }
+
+          function getDistKm(lat1, lon1, lat2, lon2) {
+            const R = 6371;
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                      Math.sin(dLon/2) * Math.sin(dLon/2);
+            return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)));
+          }
+
+          const candidates = [];
+          allOutlets.forEach(ot => {
+            const tLat = parseFloat(ot.lat || ot.latitude);
+            const tLng = parseFloat(ot.lng || ot.longitude);
+            if (isNaN(tLat) || isNaN(tLng)) return;
+            if (ot.id === originOutlet.id || (ot.name === originOutlet.name && tLat === oLat)) return;
+
+            const dist = getDistKm(oLat, oLng, tLat, tLng);
+            candidates.push({ outlet: ot, distanceKm: dist });
+          });
+
+          candidates.sort((a, b) => a.distanceKm - b.distanceKm);
+          const nearestList = candidates.slice(0, limitVal - 1);
+
+          let html = `
+            <div style="font-weight: 700; color: #0284c7; margin-bottom: 8px; border-bottom: 1px dashed #cbd5e1; padding-bottom: 4px;">
+              📍 Acuan Awal: <b>${originOutlet.name || originOutlet.nama}</b>
+            </div>
+            <div class="route-item-row" style="background: #ecfdf5; border-color: #10b981;">
+              <div>
+                <span class="route-badge-start">AWAL</span>
+                <b style="color: #065f46; font-size: 11px; margin-left: 4px;">${originOutlet.name || originOutlet.nama}</b>
+                <div style="font-size: 9.5px; color: #047857;">Kode: ${originOutlet.cust_no || originOutlet.id || '-'}</div>
+              </div>
+              <span style="font-size: 10px; font-weight: 700; color: #059669;">Titik Acuan</span>
+            </div>
+          `;
+
+          nearestList.forEach((item, idx) => {
+            const distLabel = item.distanceKm < 1 
+              ? `${Math.round(item.distanceKm * 1000)} m` 
+              : `${item.distanceKm.toFixed(2)} km`;
+
+            html += `
+              <div class="route-item-row" onclick="if(window.focusOutletOnMap) window.focusOutletOnMap('${item.outlet.id || item.outlet.cust_no}');">
+                <div>
+                  <span class="route-badge-step">#${idx + 1}</span>
+                  <b style="color: #1e293b; font-size: 11px; margin-left: 4px;">${item.outlet.name || item.outlet.nama}</b>
+                  <div style="font-size: 9.5px; color: #64748b;">Kode: ${item.outlet.cust_no || item.outlet.id || '-'}</div>
+                </div>
+                <div style="text-align: right;">
+                  <span style="font-size: 11px; font-weight: 800; color: #0284c7;">${distLabel}</span>
+                  <div style="font-size: 9px; color: #94a3b8;">jarak lurus</div>
+                </div>
+              </div>
+            `;
+          });
+
+          container.innerHTML = html;
+          
+          if (typeof showToast === 'function') {
+            showToast(`Berhasil menemukan ${nearestList.length + 1} outlet terdekat!`);
+          }
+        });
       }
     });
   </script>
