@@ -1,7 +1,6 @@
 /* ==============================================================================
-   SpotRevenue Application Controller v2.1
-   Features: Precision FlyTo Search, Manual Spatial Click, Pulsing Red Beacons,
-             Excel Export for Anomaly Audits
+   SpotRevenue Application Controller v2.7
+   Features: Zero-Lock Buffer Analysis, Smooth Search & Direct Outlet Switch
    Lead Developer: Urai Ikhsan Fadhilah
    ============================================================================== */
 
@@ -76,6 +75,21 @@ const KODYA_CENTERS = {
   'KPH': [0.8833, 112.9333]
 };
 
+const KODYA_MAX_DIST_KM = {
+  'PTK': 18,
+  'SKW': 18,
+  'PNK': 35,
+  'KRY': 45,
+  'BKY': 40,
+  'LDK': 45,
+  'SBS': 50,
+  'SGU': 60,
+  'STG': 65,
+  'MLW': 65,
+  'KTP': 70,
+  'KPH': 70
+};
+
 const ALL_MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
 let selectedMonths = [...ALL_MONTHS];
 
@@ -89,10 +103,30 @@ let activePerfFilter = null;
 let isHeatmapActive = false;
 let dashBrandChart = null;
 let dashCalcMode = 'total';
-let currentBufferCircle = null;
 let lastAnomalyList = [];
 
-// --- SISTEM KEAMANAN & AKSES LOGIN PORTAL ---
+const manualAnomalySet = new Set();
+window.manualAnomalySet = manualAnomalySet;
+
+const lastAnomalySet = new Set();
+window.lastAnomalySet = lastAnomalySet;
+
+function toggleManualAnomaly(custCode) {
+  if (!custCode) return;
+  const key = String(custCode);
+
+  if (manualAnomalySet.has(key)) {
+    manualAnomalySet.delete(key);
+    showToast(`🟢 Anomali dilepas untuk outlet: ${key}`);
+  } else {
+    manualAnomalySet.add(key);
+    showToast(`⚫ Outlet [${key}] ditandai sebagai ANOMALI MANUAL!`);
+  }
+
+  runCoordinateAnomalyAudit();
+}
+window.toggleManualAnomaly = toggleManualAnomaly;
+
 const VALID_USERS = ['admin', 'abah', 'urai', 'spotrevenue'];
 const VALID_PASSWORDS = ['spotrev2026', '2026'];
 
@@ -171,7 +205,6 @@ function showToast(msg) {
   setTimeout(() => { toast.style.display = 'none'; }, 3200);
 }
 
-// --- HELPER METRIK JARAK HAVERSINE (GEOSPATIAL) ---
 function getDistanceInMeters(lat1, lon1, lat2, lon2) {
   const R = 6371000;
   const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -313,7 +346,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   await autoDetectAndLoadMetric();
 });
 
-// --- PERBAIKAN PRESISI PENCARIAN GLOBAL & NAVIGASI PETA ---
 function setupGlobalSearchListeners() {
   const searchInput = document.getElementById('global-search-input');
   const suggestionsBox = document.getElementById('search-suggestions');
@@ -339,7 +371,7 @@ function setupGlobalSearchListeners() {
     }).slice(0, 8);
 
     if (matches.length === 0) {
-      suggestionsBox.innerHTML = `<div class="suggestion-item" style="color: #94a3b8; cursor: default;">Toko tidak ditemukan</div>`;
+      suggestionsBox.innerHTML = `<div class="suggestion-item" style="color: #94a3b8; cursor: default; padding: 8px;">Toko tidak ditemukan</div>`;
       suggestionsBox.style.display = 'block';
       return;
     }
@@ -349,7 +381,7 @@ function setupGlobalSearchListeners() {
       const code = o.customer_number || o.id || '';
       const kec = Array.isArray(o.kecamatan) ? o.kecamatan.join(', ') : (o.kecamatan || '-');
       html += `
-        <div class="suggestion-item" data-id="${o.id || o.customer_number}">
+        <div class="suggestion-item" data-id="${o.id || o.customer_number}" style="padding: 8px; cursor: pointer; border-bottom: 1px solid rgba(255,255,255,0.05);">
           <div style="font-weight: 600; color: #a7f3d0; font-size: 13px;">${o.name}</div>
           <div style="font-size: 11px; color: #94a3b8;">Kode: ${code} | Kec: ${kec}</div>
         </div>
@@ -361,38 +393,37 @@ function setupGlobalSearchListeners() {
 
     const items = suggestionsBox.querySelectorAll('.suggestion-item');
     items.forEach(item => {
-      item.addEventListener('click', () => {
+      item.addEventListener('click', (evt) => {
+        evt.stopPropagation();
         const outletId = item.getAttribute('data-id');
         const target = source.find(o => String(o.id) === String(outletId) || String(o.customer_number) === String(outletId));
+        
         if (target) {
           suggestionsBox.style.display = 'none';
+          suggestionsBox.innerHTML = '';
           searchInput.value = target.name;
 
-          // 1. TUTUP DASHBOARD FULLSCREEN JIKA SEDANG TERBUKA
-          if (typeof window.closeFullDashboard === 'function') {
-            window.closeFullDashboard();
-          }
-
-          // 2. TERBANG (FLY TO) & FOKUSKAN KAMERA PETA
           const lat = parseFloat(target.lat ?? target.latitude);
           const lng = parseFloat(target.lng ?? target.longitude);
 
           if (!isNaN(lat) && !isNaN(lng) && window.map) {
-            window.map.flyTo([lat, lng], 17, { animate: true, duration: 1.5 });
+            window.map.flyTo([lat, lng], 17, { animate: true, duration: 1.0 });
 
-            // BUKA BALON POPUP MARKER TOKO
             const searchKey1 = String(target.id);
             const searchKey2 = String(target.customer_number);
 
             if (window.outletMarkersMap && (window.outletMarkersMap.has(searchKey1) || window.outletMarkersMap.has(searchKey2))) {
               const marker = window.outletMarkersMap.get(searchKey1) || window.outletMarkersMap.get(searchKey2);
-              if (marker) marker.openPopup();
+              if (marker && typeof marker.openPopup === 'function') {
+                setTimeout(() => {
+                  marker.openPopup();
+                }, 200);
+              }
             }
           }
 
-          // 3. ATUR DETAIL TOKO
-          showOutletDetail(target, true);
-          showToast(`📍 Menampilkan lokasi: ${target.name}`);
+          showOutletDetail(target, false);
+          showToast(`📍 Menuju lokasi outlet: ${target.name}`);
         }
       });
     });
@@ -1069,7 +1100,6 @@ function renderBrandChart(brandMap, metricLabel) {
 
 window.updateDashboardAnalytics = updateDashboardAnalytics;
 
-// --- ANALISIS SPASIAL: ZONA CAKUPAN PASAR (CATCHMENT RADIUS) ---
 function updateBufferZoneAnalysis() {
   const radiusSelect = document.getElementById('select-buffer-radius');
   const resultEl = document.getElementById('buffer-analysis-result');
@@ -1083,9 +1113,8 @@ function updateBufferZoneAnalysis() {
       resultEl.style.color = '#1e293b';
       resultEl.innerHTML = "💡 <b>Petunjuk:</b> Klik salah satu toko pada peta, lalu tentukan radius untuk menampilkan area jangkauan pada peta secara visual.";
     }
-    if (currentBufferCircle && window.map) {
-      window.map.removeLayer(currentBufferCircle);
-      currentBufferCircle = null;
+    if (typeof drawBufferZone === 'function') {
+      drawBufferZone(null, null, 0);
     }
     return;
   }
@@ -1096,12 +1125,10 @@ function updateBufferZoneAnalysis() {
   const lng = parseFloat(selectedOutlet.lng ?? selectedOutlet.longitude);
   const radius = parseInt(radiusSelect ? radiusSelect.value : "0") || 0;
 
-  if (currentBufferCircle && window.map) {
-    window.map.removeLayer(currentBufferCircle);
-    currentBufferCircle = null;
-  }
-
   if (radius <= 0) {
+    if (typeof drawBufferZone === 'function') {
+      drawBufferZone(null, null, 0);
+    }
     if (resultEl) {
       resultEl.style.background = '#f8fafc';
       resultEl.style.border = '1px solid #cbd5e1';
@@ -1121,17 +1148,8 @@ function updateBufferZoneAnalysis() {
     return;
   }
 
-  if (window.map && typeof L !== 'undefined') {
-    currentBufferCircle = L.circle([lat, lng], {
-      radius: radius,
-      color: '#059669',
-      fillColor: '#10b981',
-      fillOpacity: 0.2,
-      weight: 2,
-      dashArray: '6, 6'
-    }).addTo(window.map);
-
-    window.map.flyTo([lat, lng], radius >= 3000 ? 13 : 15, { animate: true, duration: 1 });
+  if (typeof drawBufferZone === 'function') {
+    drawBufferZone(lat, lng, radius);
   }
 
   const filtered = window.lastFilteredOutlets || activeOutletData;
@@ -1154,7 +1172,6 @@ function updateBufferZoneAnalysis() {
   }
 }
 
-// --- EVALUASI TUMPANG TINDIH WILAYAH (< 500m) ---
 function checkCannibalizationRisk() {
   if (!selectedOutlet) {
     showToast("⚠️ Silakan klik toko pada peta terlebih dahulu!");
@@ -1183,20 +1200,8 @@ function checkCannibalizationRisk() {
     }
   });
 
-  if (currentBufferCircle && window.map) {
-    window.map.removeLayer(currentBufferCircle);
-  }
-  if (window.map && typeof L !== 'undefined') {
-    currentBufferCircle = L.circle([lat, lng], {
-      radius: 500,
-      color: '#dc2626',
-      fillColor: '#ef4444',
-      fillOpacity: 0.25,
-      weight: 2.5,
-      dashArray: '4, 4'
-    }).addTo(window.map);
-
-    window.map.flyTo([lat, lng], 16, { animate: true, duration: 1 });
+  if (typeof drawBufferZone === 'function') {
+    drawBufferZone(lat, lng, 500);
   }
 
   const resultEl = document.getElementById('buffer-analysis-result');
@@ -1219,13 +1224,12 @@ function checkCannibalizationRisk() {
   }
 }
 
-// --- ALGORITMA AUDIT ANOMALI KOORDINAT OUTLET + SINAR MERAH MENYALA ---
 function runCoordinateAnomalyAudit() {
   const resultContainer = document.getElementById('anomaly-audit-results');
   const btnExport = document.getElementById('btn-export-anomaly-excel');
   if (!resultContainer) return;
 
-  showToast("🔍 Menganalisis anomali geospasial seluruh toko...");
+  showToast("🔍 Menganalisis anomali geospasial & batas lautan seluruh toko...");
 
   const sourceData = activeOutletData;
   if (!sourceData || sourceData.length === 0) {
@@ -1235,36 +1239,57 @@ function runCoordinateAnomalyAudit() {
   }
 
   const anomalyList = [];
+  lastAnomalySet.clear();
 
   sourceData.forEach(o => {
     const lat = parseFloat(o.lat ?? o.latitude);
     const lng = parseFloat(o.lng ?? o.longitude);
     const kodyaKey = o.kodya || '';
+    const custCode = String(o.customer_number || o.id || '');
 
-    // RULE 1: KOORDINAT KOSONG ATAU NOL (0,0)
+    if (manualAnomalySet.has(custCode)) {
+      anomalyList.push({ outlet: o, reason: "Ditandai Manual oleh User" });
+      lastAnomalySet.add(custCode);
+      return;
+    }
+
     if (isNaN(lat) || isNaN(lng) || (lat === 0 && lng === 0)) {
       anomalyList.push({ outlet: o, reason: "Koordinat Kosong / Nol (0,0)" });
+      lastAnomalySet.add(custCode);
       return;
     }
 
-    // RULE 2: DI LUAR BATAS WILAYAH INDONESIA (Lat: -11 s/d 6, Lng: 95 s/d 141)
     if (lat < -11.0 || lat > 6.0 || lng < 95.0 || lng > 141.0) {
       anomalyList.push({ outlet: o, reason: `Di luar wilayah Indonesia (${lat.toFixed(4)}, ${lng.toFixed(4)})` });
+      lastAnomalySet.add(custCode);
       return;
     }
 
-    // RULE 3: TERDETEKSI DI LAUTAN PESISIR KALBAR (Pesisir Pontianak / Laut Natuna / Selat Karimata)
-    if (lng < 108.8 || (lng < 109.2 && lat > -0.2 && lat < 0.2)) {
-      anomalyList.push({ outlet: o, reason: `Terdeteksi di area Lautan/Lepas Pantai (${lat.toFixed(4)}, ${lng.toFixed(4)})` });
+    if (lng < 108.95) {
+      anomalyList.push({ outlet: o, reason: `Terdeteksi di area Laut Natuna / Selat Karimata (${lat.toFixed(4)}, ${lng.toFixed(4)})` });
+      lastAnomalySet.add(custCode);
       return;
     }
 
-    // RULE 4: DEVIASI JARAK EXTREME (> 75 km) DARI PUSAT KABUPATEN/KOTA TERDAFTAR
+    if (kodyaKey === 'PTK' && (lng < 109.24 || lng > 109.42 || lat < -0.09 || lat > 0.05)) {
+      anomalyList.push({ outlet: o, reason: `Di Luar Wilayah Kota Pontianak / Lautan Pesisir (${lat.toFixed(4)}, ${lng.toFixed(4)})` });
+      lastAnomalySet.add(custCode);
+      return;
+    }
+
+    if (kodyaKey === 'SKW' && (lng < 108.94 || lng > 109.12)) {
+      anomalyList.push({ outlet: o, reason: `Pesisir Laut Singkawang (${lat.toFixed(4)}, ${lng.toFixed(4)})` });
+      lastAnomalySet.add(custCode);
+      return;
+    }
+
+    const maxAllowedKm = KODYA_MAX_DIST_KM[kodyaKey] || 50;
     if (kodyaKey && KODYA_CENTERS[kodyaKey]) {
       const center = KODYA_CENTERS[kodyaKey];
       const distKm = getDistanceInMeters(lat, lng, center[0], center[1]) / 1000;
-      if (distKm > 75) {
+      if (distKm > maxAllowedKm) {
         anomalyList.push({ outlet: o, reason: `Penyimpangan Jarak (${Math.round(distKm)} km dari ${KODYA_MAP[kodyaKey] || kodyaKey})` });
+        lastAnomalySet.add(custCode);
         return;
       }
     }
@@ -1272,7 +1297,10 @@ function runCoordinateAnomalyAudit() {
 
   lastAnomalyList = anomalyList;
 
-  // TAMPILKAN SINAR MERAH MENYALA (PULSING BEACON) DI PETA SEMENTARA AUDIT
+  if (typeof window.applyAnomalyStylesToMarkers === 'function') {
+    window.applyAnomalyStylesToMarkers(lastAnomalySet);
+  }
+
   if (typeof window.highlightAnomalyMarkers === 'function') {
     window.highlightAnomalyMarkers(anomalyList);
   }
@@ -1280,7 +1308,7 @@ function runCoordinateAnomalyAudit() {
   if (anomalyList.length === 0) {
     resultContainer.innerHTML = `
       <div style="background: #f0fdf4; border: 1px solid #86efac; color: #166534; padding: 12px; border-radius: 8px; font-size: 12px;">
-        ✅ <b>Audit Selesai:</b> Seluruh lokasi toko valid dan berada dalam batas wilayah yang sesuai!
+        ✅ <b>Audit Selesai:</b> Seluruh lokasi toko valid dan berada dalam batas daratan yang sesuai!
       </div>
     `;
     if (btnExport) btnExport.style.display = 'none';
@@ -1292,7 +1320,7 @@ function runCoordinateAnomalyAudit() {
 
   let html = `
     <div style="background: #fef2f2; border: 1px solid #fca5a5; color: #991b1b; padding: 10px; border-radius: 8px; font-size: 12px; font-weight: 700; margin-bottom: 10px;">
-      ⚠️ Terdeteksi ${anomalyList.length} Toko Anomali (Sinar Merah di Peta)
+      ⚠️ Terdeteksi ${anomalyList.length} Toko Anomali (Titik Hitam Menyala)
     </div>
   `;
 
@@ -1300,10 +1328,15 @@ function runCoordinateAnomalyAudit() {
     const o = item.outlet;
     const code = o.customer_number || o.id || '-';
     html += `
-      <div class="anomaly-item" data-id="${o.id || o.customer_number}">
-        <div style="font-weight: 700; color: #991b1b; font-size: 12px;">${o.name} (${code})</div>
-        <div style="font-size: 11px; color: #7f1d1d; margin-top: 2px;">⚠️ <b>Anomali:</b> ${item.reason}</div>
-        <div style="font-size: 10px; color: #64748b; margin-top: 2px;">Kec: ${o.kecamatan || '-'} | Kab: ${KODYA_MAP[o.kodya] || o.kodya || '-'}</div>
+      <div class="anomaly-item" data-id="${o.id || o.customer_number}" style="display: flex; justify-content: space-between; align-items: center; padding: 8px; border-bottom: 1px solid #e2e8f0; cursor: pointer;">
+        <div>
+          <div style="font-weight: 700; color: #1e293b; font-size: 12px;">${o.name} (${code})</div>
+          <div style="font-size: 11px; color: #dc2626; font-weight: 700; margin-top: 2px;">⚠️ ${item.reason}</div>
+          <div style="font-size: 10px; color: #64748b; margin-top: 2px;">Kec: ${o.kecamatan || '-'} | Kab: ${KODYA_MAP[o.kodya] || o.kodya || '-'}</div>
+        </div>
+        <button onclick="event.stopPropagation(); window.toggleManualAnomaly('${code}')" style="background: #ef4444; color: white; border: none; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight:600; cursor: pointer;">
+          Hapus
+        </button>
       </div>
     `;
   });
@@ -1317,21 +1350,13 @@ function runCoordinateAnomalyAudit() {
       const target = sourceData.find(o => String(o.id) === String(outletId) || String(o.customer_number) === String(outletId));
       if (target) {
         showOutletDetail(target, false);
-        const lat = parseFloat(target.lat ?? target.latitude);
-        const lng = parseFloat(target.lng ?? target.longitude);
-
-        if (!isNaN(lat) && !isNaN(lng) && window.map) {
-          window.map.flyTo([lat, lng], 17, { animate: true, duration: 1.2 });
-        }
-        showToast(`📍 Menampilkan lokasi anomali: ${target.name}`);
       }
     });
   });
 
-  showToast(`⚠️ Selesai! ${anomalyList.length} toko anomali telah ditandai sinar merah di peta.`);
+  showToast(`⚠️ Audit selesai! ${anomalyList.length} toko anomali telah berubah warna menjadi HITAM.`);
 }
 
-// EXPORT ANOMALI KE EXCEL / CSV DENGAN KODIFIKASI UTF-8
 function exportAnomalyToExcel() {
   if (!lastAnomalyList || lastAnomalyList.length === 0) {
     showToast("⚠️ Tidak ada data anomali yang dapat di-export.");
@@ -1366,7 +1391,7 @@ function exportAnomalyToExcel() {
   showToast("📥 File Audit Anomali berhasil di-download! Silakan buka di Excel.");
 }
 
-function showOutletDetail(outlet, autoSwitchTab = true) {
+function showOutletDetail(outlet, autoSwitchTab = false) {
   selectedOutlet = outlet;
   window.selectedOutlet = outlet;
 
@@ -1446,6 +1471,20 @@ function showOutletDetail(outlet, autoSwitchTab = true) {
     document.getElementById('val-lat').innerText = '-';
     document.getElementById('val-lng').innerText = '-';
   }
+
+  const isManual = manualAnomalySet.has(String(custCode));
+  let manualBtnEl = document.getElementById('btn-manual-anomaly-sidebar');
+  if (!manualBtnEl) {
+    manualBtnEl = document.createElement('button');
+    manualBtnEl.id = 'btn-manual-anomaly-sidebar';
+    manualBtnEl.style.cssText = 'width: 100%; margin-top: 10px; padding: 8px; border: none; border-radius: 6px; font-weight: 700; cursor: pointer; transition: 0.2s;';
+    card.appendChild(manualBtnEl);
+  }
+
+  manualBtnEl.style.background = isManual ? '#059669' : '#000000';
+  manualBtnEl.style.color = '#ffffff';
+  manualBtnEl.innerText = isManual ? '🟢 Batal Anomali Manual' : '⚫ Tandai Sebagai Anomali Manual';
+  manualBtnEl.onclick = () => toggleManualAnomaly(custCode);
 
   updateBufferZoneAnalysis();
 }

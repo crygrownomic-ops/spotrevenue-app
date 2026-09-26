@@ -1,5 +1,5 @@
 /* ==============================================================================
-   SpotRevenue Map Engine v2.1 (Geospatial Intelligence, Heatmap, Buffer & Anomaly Beacon)
+   SpotRevenue Map Engine v2.7 (Zero-Lock Map Panes & Pure SVG Direct Clicks)
    Lead Developer: Urai Ikhsan Fadhilah
    ============================================================================== */
 
@@ -9,14 +9,10 @@ let heatmapLayerGroup = null;
 let bufferLayerGroup = null;
 let cannibalizationLayerGroup = null;
 let anomalyLayerGroup = null;
-let provinceBoundaryLayer = null;
 let selectedMarker = null;
 
-// Map Indexing untuk pencarian cepat dari Search Bar
 const outletMarkersMap = new Map();
 window.outletMarkersMap = outletMarkersMap;
-
-const canvasRenderer = L.canvas({ padding: 0.5 });
 
 const KODYA_MAP_FULL = {
   'PTK': 'KOTA PONTIANAK',
@@ -33,7 +29,6 @@ const KODYA_MAP_FULL = {
   'KPH': 'KABUPATEN KAPUAS HULU'
 };
 
-// Palet warna terdistribusi elegan untuk pembedaan wilayah kecamatan
 const KECAMATAN_COLOR_PALETTE = [
   '#10b981', '#3b82f6', '#f59e0b', '#ec4899', '#8b5cf6', 
   '#06b6d4', '#14b8a6', '#f97316', '#6366f1', '#84cc16',
@@ -41,11 +36,9 @@ const KECAMATAN_COLOR_PALETTE = [
   '#2563eb', '#16a34a', '#dc2626', '#9333ea', '#db2777'
 ];
 
-// Hash dinamis untuk menghasilkan warna unik yang konsisten per kecamatan
 function getKecamatanColor(kecName) {
   if (!kecName || kecName === '-') return '#1b4332';
   const nameStr = String(kecName).trim().toUpperCase();
-  
   let hash = 0;
   for (let i = 0; i < nameStr.length; i++) {
     hash = nameStr.charCodeAt(i) + ((hash << 5) - hash);
@@ -62,9 +55,8 @@ function initMap() {
 
   map = L.map('map', {
     center: [-0.0408, 109.3456],
-    zoom: 8,
-    zoomControl: false,
-    preferCanvas: true
+    zoom: 9,
+    zoomControl: false
   });
 
   L.control.zoom({ position: 'topright' }).addTo(map);
@@ -74,11 +66,18 @@ function initMap() {
     attribution: '&copy; OpenStreetMap contributors | SpotRevenue Engine'
   }).addTo(map);
 
-  // Inisialisasi Layer Group Utama
-  markerLayerGroup = L.layerGroup().addTo(map);
-  heatmapLayerGroup = L.layerGroup().addTo(map);
+  // --- MEMBENTUK LAYER PANES TERPISAH SUPAYA TIDAK SALING MENGUNCI ---
+  map.createPane('bufferPane');
+  map.getPane('bufferPane').style.zIndex = 350;
+  map.getPane('bufferPane').style.pointerEvents = 'none'; // SANGAT PENTING: TEMBUS KLIK 100%
+
+  map.createPane('markerPane');
+  map.getPane('markerPane').style.zIndex = 500;
+
   bufferLayerGroup = L.layerGroup().addTo(map);
   cannibalizationLayerGroup = L.layerGroup().addTo(map);
+  heatmapLayerGroup = L.layerGroup().addTo(map);
+  markerLayerGroup = L.layerGroup().addTo(map);
   anomalyLayerGroup = L.layerGroup().addTo(map);
 
   map.on('click', (e) => {
@@ -92,14 +91,10 @@ function initMap() {
   return map;
 }
 
-/* ==============================================================================
-   1. RENDER MARKER TITIK TOKO (MARKER MODE)
-   ============================================================================== */
 function renderOutletMarkers(outlets) {
   if (!map) initMap();
   if (!map || !markerLayerGroup) return;
 
-  // Bersihkan layer & map index sebelumnya
   markerLayerGroup.clearLayers();
   heatmapLayerGroup.clearLayers();
   cannibalizationLayerGroup.clearLayers();
@@ -119,16 +114,21 @@ function renderOutletMarkers(outlets) {
 
     if (lat !== null && lng !== null && !isNaN(lat) && !isNaN(lng) && !(lat === 0 && lng === 0)) {
       
+      const custCode = item.customer_number || item.id || '-';
       const kecName = Array.isArray(item.kecamatan) ? item.kecamatan[0] : (item.kecamatan || '-');
-      const territoryColor = getKecamatanColor(kecName);
+      
+      const isAnomaly = window.lastAnomalySet && window.lastAnomalySet.has(String(custCode));
+      const territoryColor = isAnomaly ? '#000000' : getKecamatanColor(kecName);
+      const strokeColor = isAnomaly ? '#ef4444' : '#ffffff';
 
       const circle = L.circleMarker([lat, lng], {
-        renderer: canvasRenderer,
-        radius: 5.5,
-        color: '#ffffff',
+        pane: 'markerPane', // PASTI BERADA DI PANE MARKER ATAS
+        radius: isAnomaly ? 8 : 6,
+        color: strokeColor,
         fillColor: territoryColor,
-        fillOpacity: 0.9,
-        weight: 1.2
+        fillOpacity: 0.95,
+        weight: isAnomaly ? 2.5 : 1.2,
+        interactive: true
       });
 
       let omsetFormatted = '';
@@ -142,79 +142,69 @@ function renderOutletMarkers(outlets) {
         omsetFormatted = `${totalVal.toLocaleString('id-ID')} Unit UOM`;
       }
 
-      const custCode = item.customer_number || item.id || '-';
       const kodyaName = KODYA_MAP_FULL[item.kodya] || item.kodya || '-';
       const addressName = item.address || 'Alamat tidak tersedia';
       
-      const salesmanList = Array.isArray(item.salespersons) 
-        ? [...new Set(item.salespersons.filter(Boolean))].join(', ') 
-        : (item.salespersons || '-');
+      const isManualAnomaly = window.manualAnomalySet && window.manualAnomalySet.has(String(custCode));
+      const anomalyBtnLabel = isManualAnomaly ? '🟢 Batal Anomali' : '⚫ Tandai Anomali Manual';
+      const anomalyBtnBg = isManualAnomaly ? '#059669' : '#000000';
 
-      const tooltipHtml = `
-        <div style="font-family: 'Segoe UI', sans-serif; font-size: 11px; color: #1e293b; min-width: 230px; max-width: 280px; padding: 3px;">
-          <div style="font-weight: 700; color: #1b4332; font-size: 13px; border-bottom: 2px solid ${territoryColor}; padding-bottom: 4px; margin-bottom: 6px; word-break: break-word;">
-            🏢 ${item.name || 'Tanpa Nama'}
+      const infoHtml = `
+        <div style="font-family: 'Segoe UI', sans-serif; font-size: 11px; color: #1e293b; min-width: 220px; max-width: 270px; padding: 2px;">
+          <div style="font-weight: 700; color: #1b4332; font-size: 13px; border-bottom: 2px solid ${territoryColor === '#000000' ? '#ef4444' : territoryColor}; padding-bottom: 4px; margin-bottom: 6px; word-break: break-word;">
+            ${isAnomaly ? '⚫ [ANOMALI] ' : '🏢 '} ${item.name || 'Tanpa Nama'}
           </div>
-          
           <div style="margin-bottom: 5px;">
             <span style="color: #64748b; font-weight: 600;">Kode Customer:</span> 
             <strong style="color: #0f172a; background: #e2e8f0; padding: 2px 6px; border-radius: 4px; font-family: monospace;">${custCode}</strong>
           </div>
-
-          <div style="margin-bottom: 5px;">
-            <span style="color: #64748b; font-weight: 600;">Salesman:</span> 
-            <span style="color: #047857; font-weight: bold;">${salesmanList}</span>
-          </div>
-
           <div style="padding: 6px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 5px; margin-bottom: 6px; line-height: 1.45;">
-            <div style="font-weight: 700; color: #334155; font-size: 10px; text-transform: uppercase; margin-bottom: 4px; border-bottom: 1px dashed #cbd5e1; padding-bottom: 2px;">
-              📍 Susunan Wilayah Administratif
-            </div>
-            <div><span style="color: #64748b;">Provinsi:</span> <b>KALIMANTAN BARAT</b></div>
             <div><span style="color: #64748b;">Kab/Kota:</span> <b>${kodyaName}</b></div>
-            <div><span style="color: #64748b;">Kecamatan:</span> <b style="color: ${territoryColor};">${kecName}</b></div>
+            <div><span style="color: #64748b;">Kecamatan:</span> <b>${kecName}</b></div>
             <div style="margin-top: 3px; color: #475569;"><span style="color: #64748b;">Alamat:</span> ${addressName}</div>
-            <div style="color: #059669; font-family: monospace; font-size: 10px; margin-top: 3px;"><b>Koordinat:</b> ${lat.toFixed(6)}, ${lng.toFixed(6)}</div>
           </div>
-
-          <div style="background: linear-gradient(135deg, #0f291e 0%, #1b4332 100%); color: white; padding: 6px; border-radius: 5px; text-align: center;">
-            <span style="font-size: 9.5px; color: #a7f3d0; display: block; font-weight: 600; text-transform: uppercase;">Total Performance (${currentMetric.toUpperCase()})</span>
+          <div style="background: #0f291e; color: white; padding: 6px; border-radius: 5px; text-align: center; margin-bottom: 6px;">
+            <span style="font-size: 9.5px; color: #a7f3d0; display: block; font-weight: 600;">PERFORMANCE (${currentMetric.toUpperCase()})</span>
             <strong style="font-size: 13px; color: #ffffff;">${omsetFormatted}</strong>
           </div>
+          <button onclick="window.toggleManualAnomaly('${custCode}')" style="width: 100%; background: ${anomalyBtnBg}; color: white; border: none; padding: 6px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; cursor: pointer; transition: 0.2s;">
+            ${anomalyBtnLabel}
+          </button>
         </div>
       `;
 
-      circle.bindTooltip(tooltipHtml, {
-        direction: 'top',
-        offset: [0, -6],
-        opacity: 0.98,
-        className: 'custom-leaflet-tooltip'
-      });
+      circle.bindPopup(infoHtml, { autoPan: false, closeOnClick: true });
+      circle.bindTooltip(`<b>${item.name}</b> (${custCode})`, { direction: 'top', offset: [0, -6] });
 
-      circle.on('click', (e) => {
-        L.DomEvent.stopPropagation(e);
-
-        if (selectedMarker) {
+      circle.on('click', () => {
+        if (selectedMarker && selectedMarker !== circle) {
           const prevItem = selectedMarker.options.outletRef;
-          const prevKec = Array.isArray(prevItem.kecamatan) ? prevItem.kecamatan[0] : (prevItem.kecamatan || '-');
-          selectedMarker.setStyle({
-            color: '#ffffff',
-            fillColor: getKecamatanColor(prevKec),
-            radius: 5.5
-          });
+          if (prevItem) {
+            const prevCode = prevItem.customer_number || prevItem.id;
+            const isPrevAnomaly = window.lastAnomalySet && window.lastAnomalySet.has(String(prevCode));
+            const prevKec = Array.isArray(prevItem.kecamatan) ? prevItem.kecamatan[0] : (prevItem.kecamatan || '-');
+
+            selectedMarker.setStyle({
+              color: isPrevAnomaly ? '#ef4444' : '#ffffff',
+              fillColor: isPrevAnomaly ? '#000000' : getKecamatanColor(prevKec),
+              radius: isPrevAnomaly ? 8 : 6,
+              weight: isPrevAnomaly ? 2.5 : 1.2
+            });
+          }
         }
 
         circle.setStyle({
           color: '#ffffff',
           fillColor: '#f59e0b',
-          radius: 9.5
+          radius: 10,
+          weight: 3
         });
         
-        circle.options.outletRef = item;
         selectedMarker = circle;
+        circle.openPopup();
 
         if (typeof showOutletDetail === 'function') {
-          showOutletDetail(item, true);
+          showOutletDetail(item, false);
         }
 
         if (typeof updateCoordDisplay === 'function') {
@@ -226,7 +216,6 @@ function renderOutletMarkers(outlets) {
       markers.push(circle);
       bounds.push([lat, lng]);
 
-      // REGISTRASI KE MAP INDEX DUA KUNCI UNTUK PENCARIAN PRESISI
       if (item.id) outletMarkersMap.set(String(item.id), circle);
       if (item.customer_number) outletMarkersMap.set(String(item.customer_number), circle);
     }
@@ -235,19 +224,91 @@ function renderOutletMarkers(outlets) {
   const batchGroup = L.layerGroup(markers);
   markerLayerGroup.addLayer(batchGroup);
 
-  if (bounds.length > 0) {
-    map.fitBounds(bounds, {
-      padding: [40, 40],
-      maxZoom: 14
-    });
+  if (bounds.length > 0 && !window.hasInitialFit) {
+    map.fitBounds(bounds, { padding: [40, 40], maxZoom: 12 });
+    window.hasInitialFit = true;
   }
 
   map.invalidateSize();
 }
 
-/* ==============================================================================
-   2. RENDER HEATMAP LAYER (MODE PETA PANAS)
-   ============================================================================== */
+function applyAnomalyStylesToMarkers(anomalySet) {
+  if (!outletMarkersMap) return;
+
+  outletMarkersMap.forEach((marker) => {
+    const item = marker.options.outletRef;
+    if (!item) return;
+
+    const code = String(item.customer_number || item.id || '');
+    const isAnomaly = anomalySet.has(code);
+    const kecName = Array.isArray(item.kecamatan) ? item.kecamatan[0] : (item.kecamatan || '-');
+
+    if (isAnomaly) {
+      marker.setStyle({
+        color: '#ef4444',
+        fillColor: '#000000',
+        radius: 9,
+        weight: 3.0,
+        fillOpacity: 1.0
+      });
+    } else {
+      marker.setStyle({
+        color: '#ffffff',
+        fillColor: getKecamatanColor(kecName),
+        radius: 6,
+        weight: 1.2,
+        fillOpacity: 0.95
+      });
+    }
+  });
+}
+
+function highlightAnomalyMarkers(anomalyList) {
+  if (!map) initMap();
+  if (!map || !anomalyLayerGroup) return;
+
+  anomalyLayerGroup.clearLayers();
+
+  if (!anomalyList || anomalyList.length === 0) return;
+
+  const blackBeaconIcon = L.divIcon({
+    className: 'pulsing-black-beacon-icon',
+    iconSize: [20, 20],
+    iconAnchor: [10, 10]
+  });
+
+  anomalyList.forEach(item => {
+    const o = item.outlet;
+    const lat = parseFloat(o.lat ?? o.latitude);
+    const lng = parseFloat(o.lng ?? o.longitude);
+    const custCode = o.customer_number || o.id || '-';
+
+    if (isNaN(lat) || isNaN(lng) || (lat === 0 && lng === 0)) return;
+
+    const marker = L.marker([lat, lng], { icon: blackBeaconIcon, pane: 'markerPane' });
+    
+    marker.bindPopup(`
+      <div style="font-family: 'Segoe UI', sans-serif; padding: 4px; min-width: 200px;">
+        <h4 style="margin:0 0 4px 0; color:#dc2626; font-size:13px; font-weight:700;">⚫ ANOMALI TERDETEKSI</h4>
+        <div style="font-weight:700; font-size:12px; color:#1e293b;">${o.name || 'Tanpa Nama'} (${custCode})</div>
+        <div style="font-size:11px; color:#dc2626; font-weight:700; margin-top:3px;">⚠️ ${item.reason}</div>
+        <div style="font-size:11px; color:#475569; margin-top:3px;">Kec: ${o.kecamatan || '-'} | Kab: ${KODYA_MAP_FULL[o.kodya] || o.kodya || '-'}</div>
+        <button onclick="window.toggleManualAnomaly('${custCode}')" style="width: 100%; margin-top: 6px; background: #059669; color: white; border: none; padding: 5px; border-radius: 4px; font-size: 10px; font-weight: 600; cursor: pointer;">
+          🟢 Batal Anomali
+        </button>
+      </div>
+    `, { autoPan: false });
+
+    marker.on('click', () => {
+      if (typeof showOutletDetail === 'function') {
+        showOutletDetail(o, false);
+      }
+    });
+
+    anomalyLayerGroup.addLayer(marker);
+  });
+}
+
 function renderHeatmapLayer(outlets) {
   if (!map) initMap();
   if (!map || !heatmapLayerGroup) return;
@@ -287,120 +348,39 @@ function renderHeatmapLayer(outlets) {
   }
 }
 
-/* ==============================================================================
-   3. GEOSPATIAL INTELLIGENCE: CATCHMENT AREA (BUFFER RADIUS CIRCLE)
-   ============================================================================== */
 function drawBufferZone(lat, lng, radiusInMeters) {
   if (!map) initMap();
   if (!map || !bufferLayerGroup) return;
 
   bufferLayerGroup.clearLayers();
-
   if (!lat || !lng || radiusInMeters <= 0) return;
 
   const circle = L.circle([lat, lng], {
+    pane: 'bufferPane', // DILETAKKAN DI BUFFER PANE DI BAWAH MARKER
     radius: radiusInMeters,
     color: '#10b981',
     fillColor: '#10b981',
     fillOpacity: 0.15,
     weight: 2,
-    dashArray: '5, 5'
+    dashArray: '5, 5',
+    interactive: false // MEMATIKAN INTERAKSI DARI BUFFER
   });
 
   bufferLayerGroup.addLayer(circle);
-  map.flyTo([lat, lng], 15, { animate: true, duration: 1.0 });
 }
 
-/* ==============================================================================
-   4. KANIBALISASI WILAYAH: HIGHLIGHT CLUSTERS
-   ============================================================================== */
-function highlightCannibalizationClusters(clusters) {
-  if (!map) initMap();
-  if (!map || !cannibalizationLayerGroup) return;
-
-  cannibalizationLayerGroup.clearLayers();
-
-  clusters.forEach(pair => {
-    const c1 = L.circleMarker([pair.o1.lat, pair.o1.lng], {
-      radius: 8, color: '#ef4444', fillColor: '#ef4444', fillOpacity: 0.8, weight: 2
-    });
-    const c2 = L.circleMarker([pair.o2.lat, pair.o2.lng], {
-      radius: 8, color: '#ef4444', fillColor: '#ef4444', fillOpacity: 0.8, weight: 2
-    });
-    const line = L.polyline([[pair.o1.lat, pair.o1.lng], [pair.o2.lat, pair.o2.lng]], {
-      color: '#ef4444', weight: 2, dashArray: '4, 4'
-    });
-
-    cannibalizationLayerGroup.addLayer(c1);
-    cannibalizationLayerGroup.addLayer(c2);
-    cannibalizationLayerGroup.addLayer(line);
-  });
-}
-
-/* ==============================================================================
-   5. AUDIT GEOSPATIAL: SINAR MERAH MENYALA (PULSING RED BEACON)
-   ============================================================================== */
-function highlightAnomalyMarkers(anomalyList) {
-  if (!map) initMap();
-  if (!map || !anomalyLayerGroup) return;
-
-  anomalyLayerGroup.clearLayers();
-
-  if (!anomalyList || anomalyList.length === 0) return;
-
-  const beaconIcon = L.divIcon({
-    className: 'pulsing-red-beacon-icon',
-    iconSize: [18, 18],
-    iconAnchor: [9, 9]
-  });
-
-  anomalyList.forEach(item => {
-    const o = item.outlet;
-    const lat = parseFloat(o.lat ?? o.latitude);
-    const lng = parseFloat(o.lng ?? o.longitude);
-
-    if (isNaN(lat) || isNaN(lng) || (lat === 0 && lng === 0)) return;
-
-    const marker = L.marker([lat, lng], { icon: beaconIcon });
-    
-    marker.bindPopup(`
-      <div style="font-family: 'Segoe UI', sans-serif; padding: 4px; min-width: 200px;">
-        <h4 style="margin:0 0 4px 0; color:#dc2626; font-size:13px; font-weight:700;">🚨 ANOMALI: ${o.name || 'Tanpa Nama'}</h4>
-        <div style="font-size:11px; color:#991b1b; font-weight:700; margin-bottom:4px;">${item.reason}</div>
-        <div style="font-size:11px; color:#475569;">Kec: ${o.kecamatan || '-'} | Kab: ${KODYA_MAP_FULL[o.kodya] || o.kodya || '-'}</div>
-      </div>
-    `);
-
-    marker.on('click', () => {
-      if (typeof showOutletDetail === 'function') {
-        showOutletDetail(o, true);
-      }
-    });
-
-    anomalyLayerGroup.addLayer(marker);
-  });
-}
-
-/* ==============================================================================
-   6. BORDER PROVINSI LOADER
-   ============================================================================== */
 function loadProvinceBoundary(provCode) {
   if (!map) initMap();
-  // Fokus koordinat default Kalimantan Barat (Kode '61')
-  if (provCode === '61' || !provCode) {
-    map.flyTo([-0.0408, 109.3456], 8, { animate: true, duration: 1.2 });
-  }
 }
 
 document.addEventListener('DOMContentLoaded', () => {
   initMap();
 });
 
-// Expose fungsi ke Window Global
 window.initMap = initMap;
 window.renderOutletMarkers = renderOutletMarkers;
+window.applyAnomalyStylesToMarkers = applyAnomalyStylesToMarkers;
 window.renderHeatmapLayer = renderHeatmapLayer;
 window.drawBufferZone = drawBufferZone;
-window.highlightCannibalizationClusters = highlightCannibalizationClusters;
 window.highlightAnomalyMarkers = highlightAnomalyMarkers;
 window.loadProvinceBoundary = loadProvinceBoundary;

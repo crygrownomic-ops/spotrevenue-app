@@ -265,44 +265,46 @@
     }
     .suggestion-item:last-child { border-bottom: none; }
 
-    /* ANIMASI SINAR MERAH MENYALA (PULSING BEACON) UNTUK OUTLET ANOMALI */
-    @keyframes pulse-red-beacon {
+    /* ANIMASI SINAR HITAM MENYALA (PULSING BLACK BEACON) UNTUK OUTLET ANOMALI */
+    @keyframes pulse-black-beacon {
       0% {
-        box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.9);
+        box-shadow: 0 0 0 0 rgba(0, 0, 0, 0.95);
         transform: scale(0.9);
       }
       70% {
-        box-shadow: 0 0 0 18px rgba(239, 68, 68, 0);
-        transform: scale(1.25);
+        box-shadow: 0 0 0 18px rgba(0, 0, 0, 0);
+        transform: scale(1.3);
       }
       100% {
-        box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+        box-shadow: 0 0 0 0 rgba(0, 0, 0, 0);
         transform: scale(0.9);
       }
     }
 
-    .pulsing-red-beacon-icon {
-      background-color: #ef4444;
-      border: 2px solid #ffffff;
-      border-radius: 50%;
+    .pulsing-black-beacon-icon {
+      background-color: #000000 !important;
+      border: 2px solid #ffffff !important;
+      border-radius: 50% !important;
       width: 18px !important;
       height: 18px !important;
-      animation: pulse-red-beacon 1.2s infinite ease-in-out;
-      cursor: pointer;
+      animation: pulse-black-beacon 1.2s infinite ease-in-out !important;
+      cursor: pointer !important;
+      z-index: 9999 !important;
     }
 
     .anomaly-item {
       padding: 10px 12px;
-      background: #fef2f2;
-      border: 1px solid #fca5a5;
+      background: #f8fafc;
+      border: 1px solid #cbd5e1;
       border-radius: 8px;
       margin-bottom: 8px;
       cursor: pointer;
       transition: all 0.2s ease;
     }
     .anomaly-item:hover {
-      background: #fee2e2;
+      background: #f1f5f9;
       transform: translateX(3px);
+      border-color: #000000;
     }
   </style>
 </head>
@@ -761,7 +763,7 @@
         </section>
       </div>
 
-      <!-- MODUL 5: SPASIAL (BERSIH & DILENGKAPI AUDIT DENGAN EXPORT EXCEL + SINAR MERAH MENYALA) -->
+      <!-- MODUL 5: SPASIAL (MANUAL KLIK PETA & AUDIT ANOMALI DENGAN SINAR HITAM MENYALA) -->
       <div id="modul-spasial" class="module-content-pane">
         <section class="section-card" style="background: rgba(16,185,129,0.06); border: 1px solid rgba(16,185,129,0.25);">
           <h3 class="section-title" style="color: #059669;">
@@ -808,17 +810,17 @@
           </button>
         </section>
 
-        <!-- AUDIT ANOMALI KOORDINAT OUTLET + EXPORT EXCEL & SINAR MERAH MENYALA -->
-        <section class="section-card" style="margin-top: 14px; border: 1.5px solid #ef4444; background: #fff5f5;">
-          <h3 class="section-title" style="color: #dc2626;">
+        <!-- AUDIT ANOMALI KOORDINAT OUTLET + EXPORT EXCEL & SINAR HITAM MENYALA -->
+        <section class="section-card" style="margin-top: 14px; border: 1.5px solid #000000; background: #f8fafc;">
+          <h3 class="section-title" style="color: #000000;">
             🚨 Audit Anomali Koordinat Outlet
           </h3>
-          <p class="text-sub" style="color: #7f1d1d;">
+          <p class="text-sub" style="color: #334155;">
             Deteksi otomatis toko yang koordinatnya berada di laut, luar Indonesia, atau menyimpang jauh dari kecamatan/kabupaten:
           </p>
 
           <div style="display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap;">
-            <button id="btn-run-anomaly-audit" style="flex: 1; background: #dc2626; color: white; border: none; padding: 11px; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;">
+            <button id="btn-run-anomaly-audit" style="flex: 1; background: #000000; color: white; border: none; padding: 11px; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;">
               <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
               Jalankan Audit Anomali
             </button>
