@@ -1,5 +1,5 @@
 /* ==============================================================================
-   SpotRevenue Map Engine v2.9 (Targeted Marker Update & Zero-Lag Toggle)
+   SpotRevenue Map Engine v3.5 (Targeted Marker Update, Spatial Catchment & Route)
    Lead Developer: Urai Ikhsan Fadhilah
    ============================================================================== */
 
@@ -9,6 +9,7 @@ let heatmapLayerGroup = null;
 let bufferLayerGroup = null;
 let cannibalizationLayerGroup = null;
 let anomalyLayerGroup = null;
+let routeLayerGroup = null;
 let selectedMarker = null;
 
 const outletMarkersMap = new Map();
@@ -78,6 +79,7 @@ function initMap() {
   heatmapLayerGroup = L.layerGroup().addTo(map);
   markerLayerGroup = L.layerGroup().addTo(map);
   anomalyLayerGroup = L.layerGroup().addTo(map);
+  routeLayerGroup = L.layerGroup().addTo(map);
 
   map.on('click', (e) => {
     const { lat, lng } = e.latlng;
@@ -147,13 +149,13 @@ function renderOutletMarkers(outlets) {
       const kodyaName = KODYA_MAP_FULL[item.kodya] || item.kodya || '-';
       const addressName = item.address || 'Alamat tidak tersedia';
       
-      const anomalyBtnLabel = isManualAnomaly ? '🟢 Batal Anomali' : '⚫ Tandai Anomali Manual';
+      const anomalyBtnLabel = isManualAnomaly ? 'Batal Anomali' : 'Tandai Anomali Manual';
       const anomalyBtnBg = isManualAnomaly ? '#059669' : '#000000';
 
       const infoHtml = `
         <div style="font-family: 'Segoe UI', sans-serif; font-size: 11px; color: #1e293b; min-width: 220px; max-width: 270px; padding: 2px;">
           <div style="font-weight: 700; color: #1b4332; font-size: 13px; border-bottom: 2px solid ${territoryColor === '#000000' ? '#ef4444' : territoryColor}; padding-bottom: 4px; margin-bottom: 6px; word-break: break-word;">
-            ${isAnomaly ? '⚫ [ANOMALI] ' : '🏢 '} ${item.name || 'Tanpa Nama'}
+            ${isAnomaly ? '[ANOMALI] ' : ''} ${item.name || 'Tanpa Nama'}
           </div>
           <div style="margin-bottom: 5px;">
             <span style="color: #64748b; font-weight: 600;">Kode Customer:</span> 
@@ -200,7 +202,7 @@ function renderOutletMarkers(outlets) {
           radius: 10,
           weight: 3
         });
-        
+
         selectedMarker = circle;
         circle.openPopup();
 
@@ -233,7 +235,109 @@ function renderOutletMarkers(outlets) {
   map.invalidateSize();
 }
 
-/* FUNGSI UPDATE MARKER TUNGGAL AGAR TIDAK MEMBEBANI HALAMAN */
+/* FUNGSI MENGGAMBAR LINGKARAN RADIUS CATCHMENT */
+function drawBufferCircle(latlng, radiusMeters) {
+  if (!map) initMap();
+  if (!map || !bufferLayerGroup) return;
+
+  bufferLayerGroup.clearLayers();
+
+  if (!latlng || isNaN(latlng[0]) || isNaN(latlng[1]) || radiusMeters <= 0) return;
+
+  const circle = L.circle(latlng, {
+    pane: 'bufferPane',
+    radius: radiusMeters,
+    color: '#38bdf8',        // Warna garis biru langit terang
+    fillColor: '#38bdf8',    // Isian transparan
+    fillOpacity: 0.20,
+    weight: 2.5,
+    dashArray: '6, 6',
+    interactive: false
+  });
+
+  bufferLayerGroup.addLayer(circle);
+  map.flyTo(latlng, map.getZoom() < 14 ? 14 : map.getZoom(), { animate: true });
+}
+
+function clearBufferCircle() {
+  if (bufferLayerGroup) {
+    bufferLayerGroup.clearLayers();
+  }
+}
+
+/* FUNGSI MENGGAMBAR GARIS TUMPANG TINDIH OUTLET (<500M) */
+function highlightCannibalizationPairs(pairs) {
+  if (!map) initMap();
+  if (!map || !cannibalizationLayerGroup) return;
+
+  cannibalizationLayerGroup.clearLayers();
+
+  if (!pairs || pairs.length === 0) return;
+
+  const lineBounds = [];
+
+  pairs.forEach(pair => {
+    const aLat = parseFloat(pair.a.lat ?? pair.a.latitude);
+    const aLng = parseFloat(pair.a.lng ?? pair.a.longitude);
+    const bLat = parseFloat(pair.b.lat ?? pair.b.latitude);
+    const bLng = parseFloat(pair.b.lng ?? pair.b.longitude);
+
+    if (!isNaN(aLat) && !isNaN(aLng) && !isNaN(bLat) && !isNaN(bLng)) {
+      const latlngs = [[aLat, aLng], [bLat, bLng]];
+      lineBounds.push([aLat, aLng]);
+      lineBounds.push([bLat, bLng]);
+
+      const polyline = L.polyline(latlngs, {
+        color: '#f97316', // Warna Oranye Peringatan
+        weight: 3,
+        opacity: 0.9,
+        dashArray: '8, 8'
+      });
+
+      polyline.bindPopup(`
+        <div style="font-family: 'Segoe UI', sans-serif; font-size:11px; color: #0f172a; padding: 2px;">
+          <b style="color:#ea580c;">⚠️ Tumpang Tindih (&lt;500m)</b><br>
+          <b>Toko 1:</b> ${pair.a.name}<br>
+          <b>Toko 2:</b> ${pair.b.name}<br>
+          <b>Jarak Berdekatan:</b> ${pair.dist} meter
+        </div>
+      `);
+
+      cannibalizationLayerGroup.addLayer(polyline);
+    }
+  });
+
+  if (lineBounds.length > 0) {
+    map.fitBounds(L.latLngBounds(lineBounds), { padding: [50, 50], maxZoom: 16 });
+  }
+}
+
+function clearCannibalizationLines() {
+  if (cannibalizationLayerGroup) {
+    cannibalizationLayerGroup.clearLayers();
+  }
+}
+
+/* FUNGSI MENGGAMBAR RUTE EFFISIEN DENGAN POLYLINE */
+function drawSalesRoute(coords) {
+  if (!map) initMap();
+  if (!map || !routeLayerGroup) return;
+
+  routeLayerGroup.clearLayers();
+
+  if (!coords || coords.length < 2) return;
+
+  const polyline = L.polyline(coords, {
+    color: '#38bdf8',
+    weight: 4,
+    opacity: 0.85,
+    dashArray: '8, 8'
+  });
+
+  routeLayerGroup.addLayer(polyline);
+  map.fitBounds(polyline.getBounds(), { padding: [50, 50] });
+}
+
 function updateSingleMarkerAnomalyState(custCode, isManual) {
   if (!outletMarkersMap) return;
   const marker = outletMarkersMap.get(String(custCode));
@@ -276,7 +380,6 @@ function updateSingleMarkerAnomalyState(custCode, isManual) {
     setTimeout(() => marker.openPopup(), 50);
   }
 }
-window.updateSingleMarkerAnomalyState = updateSingleMarkerAnomalyState;
 
 function applyAnomalyStylesToMarkers(anomalySet) {
   if (!outletMarkersMap) return;
@@ -314,7 +417,7 @@ function clearAnomalyAudit() {
   if (anomalyLayerGroup) {
     anomalyLayerGroup.clearLayers();
   }
-  
+
   if (window.lastAnomalySet) {
     window.lastAnomalySet.clear();
   }
@@ -347,7 +450,6 @@ function clearAnomalyAudit() {
     });
   }
 }
-window.clearAnomalyAudit = clearAnomalyAudit;
 
 function highlightAnomalyMarkers(anomalyList) {
   if (!map) initMap();
@@ -372,15 +474,15 @@ function highlightAnomalyMarkers(anomalyList) {
     if (isNaN(lat) || isNaN(lng) || (lat === 0 && lng === 0)) return;
 
     const marker = L.marker([lat, lng], { icon: blackBeaconIcon, pane: 'markerPane' });
-    
+
     marker.bindPopup(`
       <div style="font-family: 'Segoe UI', sans-serif; padding: 4px; min-width: 200px;">
-        <h4 style="margin:0 0 4px 0; color:#dc2626; font-size:13px; font-weight:700;">⚫ ANOMALI TERDETEKSI</h4>
+        <h4 style="margin:0 0 4px 0; color:#dc2626; font-size:13px; font-weight:700;">ANOMALI TERDETEKSI</h4>
         <div style="font-weight:700; font-size:12px; color:#1e293b;">${o.name || 'Tanpa Nama'} (${custCode})</div>
-        <div style="font-size:11px; color:#dc2626; font-weight:700; margin-top:3px;">⚠️ ${item.reason}</div>
+        <div style="font-size:11px; color:#dc2626; font-weight:700; margin-top:3px;">${item.reason}</div>
         <div style="font-size:11px; color:#475569; margin-top:3px;">Kec: ${o.kecamatan || '-'} | Kab: ${KODYA_MAP_FULL[o.kodya] || o.kodya || '-'}</div>
         <button onclick="window.toggleManualAnomaly('${custCode}')" style="width: 100%; margin-top: 6px; background: #059669; color: white; border: none; padding: 5px; border-radius: 4px; font-size: 10px; font-weight: 600; cursor: pointer;">
-          🟢 Batal Anomali
+          Batal Anomali
         </button>
       </div>
     `, { autoPan: false });
@@ -434,27 +536,6 @@ function renderHeatmapLayer(outlets) {
   }
 }
 
-function drawBufferZone(lat, lng, radiusInMeters) {
-  if (!map) initMap();
-  if (!map || !bufferLayerGroup) return;
-
-  bufferLayerGroup.clearLayers();
-  if (!lat || !lng || radiusInMeters <= 0) return;
-
-  const circle = L.circle([lat, lng], {
-    pane: 'bufferPane',
-    radius: radiusInMeters,
-    color: '#10b981',
-    fillColor: '#10b981',
-    fillOpacity: 0.15,
-    weight: 2,
-    dashArray: '5, 5',
-    interactive: false
-  });
-
-  bufferLayerGroup.addLayer(circle);
-}
-
 function loadProvinceBoundary(provCode) {
   if (!map) initMap();
 }
@@ -465,8 +546,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
 window.initMap = initMap;
 window.renderOutletMarkers = renderOutletMarkers;
+window.drawBufferCircle = drawBufferCircle;
+window.clearBufferCircle = clearBufferCircle;
+window.highlightCannibalizationPairs = highlightCannibalizationPairs;
+window.clearCannibalizationLines = clearCannibalizationLines;
+window.drawSalesRoute = drawSalesRoute;
+window.updateSingleMarkerAnomalyState = updateSingleMarkerAnomalyState;
 window.applyAnomalyStylesToMarkers = applyAnomalyStylesToMarkers;
-window.renderHeatmapLayer = renderHeatmapLayer;
-window.drawBufferZone = drawBufferZone;
+window.clearAnomalyAudit = clearAnomalyAudit;
 window.highlightAnomalyMarkers = highlightAnomalyMarkers;
+window.renderHeatmapLayer = renderHeatmapLayer;
 window.loadProvinceBoundary = loadProvinceBoundary;
