@@ -1,5 +1,5 @@
 /* ==============================================================================
-   SpotRevenue Application Controller v3.6 (Spatial Grid Optimization & Multi-Color Theme)
+   SpotRevenue Application Controller v3.7 (Unfreeze Guarantee & Spatial Grid Optimization)
    Lead Developer: Urai Ikhsan Fadhilah
    ============================================================================== */
 
@@ -374,7 +374,7 @@ function updateBufferZoneAnalysis() {
   }
 }
 
-/* EVALUASI TUMPANG TINDIH WILAYAH / KANIBALISASI (<500M) - ALGORITMA SPATIAL GRID HIGH-PERFORMANCE */
+/* EVALUASI TUMPANG TINDIH WILAYAH / KANIBALISASI (<500M) - HIGH PERFORMANCE & UNFREEZE GUARANTEED */
 async function checkCannibalization() {
   const dataset = window.lastFilteredOutlets || activeOutletData;
   if (!dataset || dataset.length === 0) {
@@ -382,79 +382,95 @@ async function checkCannibalization() {
     return;
   }
 
-  showLoading("Mengevaluasi tumpang tindih lokasi (Spatial Grid Partitioning)...");
+  showLoading("Mengevaluasi tumpang tindih lokasi...");
 
-  // Beri jeda singkat 30ms agar UI sempat menampilkan modal/overlay loading
-  await new Promise(resolve => setTimeout(resolve, 30));
+  // Jeda 50ms agar UI browser sempat merender modal loading
+  await new Promise(resolve => setTimeout(resolve, 50));
 
   const startTime = performance.now();
-  const thresholdMeters = 500;
-  
-  // Ukuran sel grid spasial (~500 meter = 0.0045 derajat latitude/longitude)
-  const cellSize = 0.0045; 
-  const grid = new Map();
-
-  // 1. Kelompokkan toko ke dalam grid spasial berdasarkan koordinatnya
-  for (let i = 0; i < dataset.length; i++) {
-    const o = dataset[i];
-    const lat = parseFloat(o.lat ?? o.latitude);
-    const lng = parseFloat(o.lng ?? o.longitude);
-
-    if (!isNaN(lat) && !isNaN(lng) && !(lat === 0 && lng === 0)) {
-      const gx = Math.floor(lat / cellSize);
-      const gy = Math.floor(lng / cellSize);
-      const cellKey = `${gx}_${gy}`;
-
-      if (!grid.has(cellKey)) {
-        grid.set(cellKey, []);
-      }
-      grid.get(cellKey).push({ outlet: o, lat, lng, index: i });
-    }
-  }
-
   const overlappingPairs = [];
-  const processedPairs = new Set();
 
-  // 2. Evaluasi HANYA toko dalam sel yang sama dan 8 sel tetangga di sekitarnya
-  grid.forEach((cellOutlets, cellKey) => {
-    const [gx, gy] = cellKey.split('_').map(Number);
+  try {
+    const thresholdMeters = 500;
+    const cellSize = 0.0045; // Sel grid ~500m
+    const grid = new Map();
 
-    for (let dx = -1; dx <= 1; dx++) {
-      for (let dy = -1; dy <= 1; dy++) {
-        const neighborKey = `${gx + dx}_${gy + dy}`;
-        const neighborOutlets = grid.get(neighborKey);
+    // 1. Plotting toko ke Spatial Grid
+    for (let i = 0; i < dataset.length; i++) {
+      const o = dataset[i];
+      const lat = parseFloat(o.lat ?? o.latitude);
+      const lng = parseFloat(o.lng ?? o.longitude);
 
-        if (!neighborOutlets) continue;
+      if (!isNaN(lat) && !isNaN(lng) && !(lat === 0 && lng === 0)) {
+        const gx = Math.floor(lat / cellSize);
+        const gy = Math.floor(lng / cellSize);
+        const cellKey = `${gx}_${gy}`;
 
-        for (const a of cellOutlets) {
-          for (const b of neighborOutlets) {
-            // Hindari evaluasi toko terhadap dirinya sendiri dan pembandingan berulang
-            if (a.index >= b.index) continue;
+        if (!grid.has(cellKey)) {
+          grid.set(cellKey, []);
+        }
+        grid.get(cellKey).push({ outlet: o, lat, lng, index: i });
+      }
+    }
 
-            const pairId = `${a.index}_${b.index}`;
-            if (processedPairs.has(pairId)) continue;
-            processedPairs.add(pairId);
+    const evaluatedPairs = new Set();
 
-            const dist = getDistanceInMeters(a.lat, a.lng, b.lat, b.lng);
-            if (dist < thresholdMeters) {
-              overlappingPairs.push({ a: a.outlet, b: b.outlet, dist: Math.round(dist) });
+    // 2. Evaluasi Efisien Tetangga Sel Grid
+    grid.forEach((cellOutlets, cellKey) => {
+      const [gx, gy] = cellKey.split('_').map(Number);
+
+      for (let dx = -1; dx <= 1; dx++) {
+        for (let dy = -1; dy <= 1; dy++) {
+          const neighborKey = `${gx + dx}_${gy + dy}`;
+          const neighborOutlets = grid.get(neighborKey);
+
+          if (!neighborOutlets) continue;
+
+          for (let aIdx = 0; aIdx < cellOutlets.length; aIdx++) {
+            const a = cellOutlets[aIdx];
+            for (let bIdx = 0; bIdx < neighborOutlets.length; bIdx++) {
+              const b = neighborOutlets[bIdx];
+
+              if (a.index >= b.index) continue;
+
+              const pairId = `${a.index}_${b.index}`;
+              if (evaluatedPairs.has(pairId)) continue;
+              evaluatedPairs.add(pairId);
+
+              const dist = getDistanceInMeters(a.lat, a.lng, b.lat, b.lng);
+              if (dist < thresholdMeters) {
+                overlappingPairs.push({ a: a.outlet, b: b.outlet, dist: Math.round(dist) });
+              }
             }
           }
         }
       }
+    });
+
+    const endTime = performance.now();
+    const durationMs = (endTime - startTime).toFixed(1);
+
+    // 3. Highlight Garis Peta (Maksimal 150 Garis Pertama untuk Mencegah Map Lag)
+    if (typeof window.highlightCannibalizationPairs === 'function') {
+      window.highlightCannibalizationPairs(overlappingPairs.slice(0, 150));
     }
-  });
 
-  hideLoading();
-  const endTime = performance.now();
-  const durationMs = (endTime - startTime).toFixed(1);
+    // 4. Render Hasil Rincian ke Sidebar
+    renderCannibalizationResultsUI(overlappingPairs, durationMs);
 
-  // 3. Highlight Garis Hubung Oranye di Peta Leaflet
-  if (typeof window.highlightCannibalizationPairs === 'function') {
-    window.highlightCannibalizationPairs(overlappingPairs);
+    showToast(`Evaluasi Selesai (${durationMs} ms): Ditemukan ${overlappingPairs.length} pasangan toko berdekatan.`);
+
+  } catch (err) {
+    console.error("Gagal melakukan evaluasi tumpang tindih:", err);
+    showToast("Terjadi kesalahan saat mengevaluasi tumpang tindih.");
+  } finally {
+    // PASTI DIPANGGIL: Menjamin loading overlay tertutup dalam kondisi apa pun
+    hideLoading();
   }
+}
 
-  // 4. Render Hasil Pasangan Toko ke Container Sidebar
+/* HELPER RENDER HASIL SIDEBAR SPASIAL */
+function renderCannibalizationResultsUI(overlappingPairs, durationMs) {
   let resultContainer = document.getElementById('cannibalization-results-container');
   const parentBtn = document.getElementById('btn-check-cannibalization');
   const parentCard = parentBtn ? parentBtn.closest('.section-card') : null;
@@ -462,60 +478,57 @@ async function checkCannibalization() {
   if (!resultContainer && parentCard) {
     resultContainer = document.createElement('div');
     resultContainer.id = 'cannibalization-results-container';
-    resultContainer.style.cssText = 'margin-top: 10px; max-height: 200px; overflow-y: auto; background: rgba(0,0,0,0.45); border: 1px solid rgba(249, 115, 22, 0.4); border-radius: 8px; padding: 8px;';
+    resultContainer.style.cssText = 'margin-top: 10px; max-height: 220px; overflow-y: auto; background: rgba(0,0,0,0.5); border: 1px solid rgba(249, 115, 22, 0.4); border-radius: 8px; padding: 8px;';
     parentCard.appendChild(resultContainer);
   }
 
-  if (resultContainer) {
-    if (overlappingPairs.length === 0) {
-      resultContainer.innerHTML = `
-        <div style="color: #a7f3d0; font-size: 11px; text-align: center; padding: 6px;">
-          ✅ Tidak ada outlet yang saling berdekatan (&lt; 500m). Teritori optimal! (${durationMs} ms)
-        </div>
-      `;
-    } else {
-      let html = `
-        <div style="font-weight: 700; color: #f97316; font-size: 11.5px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center;">
-          <span>⚠️ Ditemukan ${overlappingPairs.length} Pasangan Toko (&lt;500m):</span>
-          <span style="color: #cbd5e1; font-weight: 400; font-size: 10px;">⏱️ ${durationMs} ms</span>
-        </div>
-      `;
+  if (!resultContainer) return;
 
-      overlappingPairs.forEach((pair, idx) => {
-        html += `
-          <div class="cannibal-pair-item" data-idx="${idx}" style="padding: 6px 8px; border-bottom: 1px solid rgba(255,255,255,0.08); cursor: pointer; border-radius: 4px; transition: background 0.2s;">
-            <div style="font-size: 11px; font-weight: 700; color: #ffffff;">${pair.a.name} <span style="color: #f97316;">↔</span> ${pair.b.name}</div>
-            <div style="font-size: 10px; color: #cbd5e1; display: flex; justify-content: space-between; margin-top: 2px;">
-              <span>Kec: ${pair.a.kecamatan || '-'}</span>
-              <b style="color: #f97316;">Jarak: ${pair.dist}m</b>
-            </div>
+  if (overlappingPairs.length === 0) {
+    resultContainer.innerHTML = `
+      <div style="color: #a7f3d0; font-size: 11px; text-align: center; padding: 8px;">
+        ✅ Tidak ada outlet yang saling berdekatan (&lt; 500m). Teritori optimal! (${durationMs} ms)
+      </div>
+    `;
+  } else {
+    let html = `
+      <div style="font-weight: 700; color: #f97316; font-size: 11.5px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center;">
+        <span>⚠️ Ditemukan ${overlappingPairs.length} Pasangan Toko (&lt;500m):</span>
+        <span style="color: #cbd5e1; font-weight: 400; font-size: 10px;">⏱️ ${durationMs} ms</span>
+      </div>
+    `;
+
+    overlappingPairs.forEach((pair, idx) => {
+      html += `
+        <div class="cannibal-pair-item" data-idx="${idx}" style="padding: 6px 8px; border-bottom: 1px solid rgba(255,255,255,0.08); cursor: pointer; border-radius: 4px; transition: background 0.2s;">
+          <div style="font-size: 11px; font-weight: 700; color: #ffffff;">${pair.a.name} <span style="color: #f97316;">↔</span> ${pair.b.name}</div>
+          <div style="font-size: 10px; color: #cbd5e1; display: flex; justify-content: space-between; margin-top: 2px;">
+            <span>Kec: ${pair.a.kecamatan || '-'}</span>
+            <b style="color: #f97316;">Jarak: ${pair.dist}m</b>
           </div>
-        `;
+        </div>
+      `;
+    });
+
+    resultContainer.innerHTML = html;
+
+    const pairItems = resultContainer.querySelectorAll('.cannibal-pair-item');
+    pairItems.forEach(item => {
+      item.addEventListener('click', () => {
+        const idx = parseInt(item.getAttribute('data-idx'));
+        const pair = overlappingPairs[idx];
+        if (pair && window.map) {
+          const aLat = parseFloat(pair.a.lat ?? pair.a.latitude);
+          const aLng = parseFloat(pair.a.lng ?? pair.a.longitude);
+          const bLat = parseFloat(pair.b.lat ?? pair.b.latitude);
+          const bLng = parseFloat(pair.b.lng ?? pair.b.longitude);
+
+          window.map.fitBounds([[aLat, aLng], [bLat, bLng]], { padding: [80, 80], maxZoom: 17 });
+          showToast(`Fokus ke lokasi: ${pair.a.name} & ${pair.b.name}`);
+        }
       });
-
-      resultContainer.innerHTML = html;
-
-      // Event listener klik daftar sidebar untuk zoom otomatis ke lokasi pasangan toko
-      const pairItems = resultContainer.querySelectorAll('.cannibal-pair-item');
-      pairItems.forEach(item => {
-        item.addEventListener('click', () => {
-          const idx = parseInt(item.getAttribute('data-idx'));
-          const pair = overlappingPairs[idx];
-          if (pair && window.map) {
-            const aLat = parseFloat(pair.a.lat ?? pair.a.latitude);
-            const aLng = parseFloat(pair.a.lng ?? pair.a.longitude);
-            const bLat = parseFloat(pair.b.lat ?? pair.b.latitude);
-            const bLng = parseFloat(pair.b.lng ?? pair.b.longitude);
-
-            window.map.fitBounds([[aLat, aLng], [bLat, bLng]], { padding: [80, 80], maxZoom: 17 });
-            showToast(`Fokus ke lokasi: ${pair.a.name} & ${pair.b.name}`);
-          }
-        });
-      });
-    }
+    });
   }
-
-  showToast(`Evaluasi Selesai (${durationMs} ms): Ditemukan ${overlappingPairs.length} pasangan toko berdekatan.`);
 }
 
 function setupMetricSwitchListeners() {
