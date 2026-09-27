@@ -22,17 +22,24 @@
 
   <style>
     /* ==============================================================================
-       DIRECT EMBEDDED PATCH V4.3 (FIX SIDEBAR AUTO HIDE HOVER BEHAVIOR)
+       PERBAIKAN SIDEBAR AUTO-HIDE & SLIDE ANIMATION V4.4
        ============================================================================== */
     
-    /* Hanya set lebar 350px saat HOVER, EXPANDED, atau PINNED */
-    #sidebar:hover,
-    #sidebar.sidebar-expanded,
-    #sidebar.pinned {
+    /* 1. Default Sidebar: Sembunyi 100% keluar layar di sisi kiri */
+    #sidebar {
       width: 350px !important;
       min-width: 350px !important;
       max-width: 90vw !important;
-      transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s ease !important;
+      transform: translateX(-100%) !important;
+      transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
+    }
+
+    /* 2. Slide masuk saat trigger zone disentuh hover, sidebar dihover, expanded, atau pinned */
+    #sidebar-trigger-zone:hover + #sidebar,
+    #sidebar:hover,
+    #sidebar.sidebar-expanded,
+    #sidebar.pinned {
+      transform: translateX(0) !important;
     }
 
     /* Fullscreen Dashboard */
