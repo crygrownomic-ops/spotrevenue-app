@@ -22,11 +22,11 @@
 
   <style>
     /* ==============================================================================
-       DIRECT EMBEDDED PATCH V4.3 (LEBAR SIDEBAR 350PX & STYLING MODUL OPTIMAL)
+       DIRECT EMBEDDED PATCH V4.3 (FIX SIDEBAR AUTO HIDE HOVER BEHAVIOR)
        ============================================================================== */
     
-    /* Lebar Sidebar 350px dengan transisi smooth */
-    #sidebar,
+    /* Hanya set lebar 350px saat HOVER, EXPANDED, atau PINNED */
+    #sidebar:hover,
     #sidebar.sidebar-expanded,
     #sidebar.pinned {
       width: 350px !important;
@@ -547,7 +547,7 @@
     </span>
   </div>
 
-  <!-- SIDEBAR UTAMA SPOTREVENUE (AUTO HIDE DEFAULT, MANUAL PIN AVAILABLE) -->
+  <!-- SIDEBAR UTAMA SPOTREVENUE -->
   <aside id="sidebar">
     
     <header class="header">
