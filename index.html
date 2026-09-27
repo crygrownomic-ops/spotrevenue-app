@@ -25,7 +25,7 @@
        DIRECT EMBEDDED PATCH V4.3 (LEBAR SIDEBAR 350PX & STYLING MODUL OPTIMAL)
        ============================================================================== */
     
-    /* Paksa Lebar Sidebar saat Terbuka atau Dikunci menjadi 350px */
+    /* Lebar Sidebar 350px dengan transisi smooth */
     #sidebar,
     #sidebar.sidebar-expanded,
     #sidebar.pinned {
@@ -35,7 +35,7 @@
       transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s ease !important;
     }
 
-    /* Fullscreen Dashboard (Default Terbuka Tampil di Awal) */
+    /* Fullscreen Dashboard */
     #fullscreen-dashboard {
       position: fixed;
       inset: 0;
@@ -43,7 +43,7 @@
       background: #081812;
       color: #f8fafc;
       overflow-y: auto;
-      display: flex; /* Default terbuka saat refresh */
+      display: flex;
       flex-direction: column;
       font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
       padding: 24px 32px;
@@ -356,7 +356,7 @@
     <div id="search-suggestions" class="search-suggestions-list"></div>
   </div>
 
-  <!-- DASHBOARD FULL SCREEN OVERLAY (HALAMAN UTAMA/LANDING PAGE) -->
+  <!-- DASHBOARD FULL SCREEN OVERLAY -->
   <div id="fullscreen-dashboard" class="dash-animated">
     <header class="dash-header">
       <div class="dash-header-top">
@@ -547,7 +547,7 @@
     </span>
   </div>
 
-  <!-- SIDEBAR UTAMA SPOTREVENUE (SUDAH BISA AUTO HIDE) -->
+  <!-- SIDEBAR UTAMA SPOTREVENUE (AUTO HIDE DEFAULT, MANUAL PIN AVAILABLE) -->
   <aside id="sidebar">
     
     <header class="header">
@@ -1058,7 +1058,7 @@
   <!-- EVENT HANDLER PENAMBUNG MODUL & KONTROL FULL INTERAKSI -->
   <script>
     document.addEventListener('DOMContentLoaded', () => {
-      // 1. OTOMATIS BUKA FULLSCREEN DASHBOARD SAAT REFRESH
+      // 1. KONTROL DASHBOARD FULLSCREEN
       window.openFullDashboard = function() {
         const fullDash = document.getElementById('fullscreen-dashboard');
         if (fullDash) fullDash.style.display = 'flex';
@@ -1070,7 +1070,7 @@
         if (fullDash) fullDash.style.display = 'none';
       };
 
-      // Jalankan pembukaan dashboard secara otomatis saat halaman dimuat
+      // Buka dashboard secara otomatis saat halaman pertama dibuka
       openFullDashboard();
 
       const btnNavDash = document.getElementById('btn-nav-dash-open');
@@ -1079,7 +1079,7 @@
       if (btnNavDash) btnNavDash.addEventListener('click', openFullDashboard);
       if (btnCloseDash) btnCloseDash.addEventListener('click', closeFullDashboard);
 
-      // 2. KONTROL HEADER DASHBOARD (TERKONEKSI FULL KE APP.JS)
+      // 2. KONTROL HEADER DASHBOARD
       // A. Select Tahun
       const dashSelectTahun = document.getElementById('dash-select-tahun');
       if (dashSelectTahun) {
@@ -1170,7 +1170,7 @@
         });
       });
 
-      // 4. FITUR TOP OUTLET TERDEKAT (EKSEKUSI CEPAT)
+      // 4. OPTIMASI RUTE TOP OUTLET TERDEKAT
       const btnGenerateRoute = document.getElementById('btn-generate-route');
       if (btnGenerateRoute) {
         btnGenerateRoute.addEventListener('click', () => {
