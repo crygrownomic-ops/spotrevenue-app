@@ -4,629 +4,399 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="author" content="Urai Ikhsan Fadhilah">
-  <title>SpotRevenue (SpotRev) - Enterprise Location & Revenue Intelligence</title>
+  <title>SpotRevenue - Enterprise Location & Revenue Intelligence</title>
 
-  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='48' fill='%230f291e'/><path d='M50 18 A 20 20 0 0 0 30 38 C 30 52 50 72 50 72 C 50 72 70 52 70 38 A 20 20 0 0 0 50 18 Z' fill='%2310b981'/><circle cx='50' cy='38' r='7' fill='%230f291e'/><rect x='25' y='75' width='12' height='10' fill='%23a7f3d0'/><rect x='44' y='67' width='12' height='18' fill='%23ffffff'/><rect x='63' y='59' width='12' height='26' fill='%2310b981'/></svg>">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='48' fill='%23121212'/><path d='M50 18 A 20 20 0 0 0 30 38 C 30 52 50 72 50 72 C 50 72 70 52 70 38 A 20 20 0 0 0 50 18 Z' fill='%23dc2626'/><circle cx='50' cy='38' r='7' fill='%23f59e0b'/><rect x='25' y='75' width='12' height='10' fill='%23ffffff'/><rect x='44' y='67' width='12' height='18' fill='%23f59e0b'/><rect x='63' y='59' width='12' height='26' fill='%23dc2626'/></svg>">
 
-  <!-- Leaflet & Dexie -->
+  <!-- Leaflet, Dexie, & Chart.js -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/dexie@3.2.4/dist/dexie.js"></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
-  
-  <!-- Chart.js untuk Grafik Interaktif Dashboard -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
   <!-- Stylesheet Utama -->
   <link rel="stylesheet" href="css/styles.css">
-
   <style>
-    /* ==============================================================================
-       PERBAIKAN SIDEBAR AUTO-HIDE & SLIDE ANIMATION V4.4
-       ============================================================================== */
-    
-    /* 1. Default Sidebar: Sembunyi 100% keluar layar di sisi kiri */
-    #sidebar {
-      width: 350px !important;
-      min-width: 350px !important;
-      max-width: 90vw !important;
-      transform: translateX(-100%) !important;
-      transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
-    }
-
-    /* 2. Slide masuk saat trigger zone disentuh hover, sidebar dihover, expanded, atau pinned */
-    #sidebar-trigger-zone:hover + #sidebar,
-    #sidebar:hover,
-    #sidebar.sidebar-expanded,
-    #sidebar.pinned {
-      transform: translateX(0) !important;
-    }
-
-    /* Fullscreen Dashboard */
-    #fullscreen-dashboard {
-      position: fixed;
-      inset: 0;
-      z-index: 2500;
-      background: #081812;
-      color: #f8fafc;
-      overflow-y: auto;
-      display: flex;
-      flex-direction: column;
-      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-      padding: 24px 32px;
-      -ms-overflow-style: none;
-      scrollbar-width: none;
-    }
-    #fullscreen-dashboard::-webkit-scrollbar { display: none; }
-
-    @keyframes fadeInScale {
-      from { opacity: 0; transform: scale(0.98); }
-      to { opacity: 1; transform: scale(1); }
-    }
-    .dash-animated { animation: fadeInScale 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
-
-    .dash-header {
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-      padding-bottom: 20px;
-      border-bottom: 1px solid rgba(255,255,255,0.1);
-      margin-bottom: 24px;
-    }
-
-    .dash-header-top {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      flex-wrap: wrap;
-      gap: 16px;
-    }
-
-    .dash-header-controls {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      flex-wrap: wrap;
-      background: rgba(255,255,255,0.03);
-      padding: 10px 14px;
-      border-radius: 12px;
-      border: 1px solid rgba(255,255,255,0.08);
-    }
-
-    .dash-card {
-      background: rgba(255, 255, 255, 0.04);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      border-radius: 14px;
-      padding: 20px;
-      -webkit-backdrop-filter: blur(10px);
-      backdrop-filter: blur(10px);
-      transition: all 0.25s ease;
-    }
-    .dash-card:hover {
-      border-color: rgba(16, 185, 129, 0.3);
-      transform: translateY(-2px);
-      box-shadow: 0 12px 30px rgba(0,0,0,0.3);
-    }
-
-    .kpi-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-      gap: 16px;
-      margin-bottom: 24px;
-    }
-
-    .kpi-value-lg {
-      font-size: 24px;
-      font-weight: 700;
-      color: #10b981;
-      margin-top: 6px;
-    }
-
-    .analytics-grid-main {
-      display: grid;
-      grid-template-columns: 2fr 1fr;
-      gap: 20px;
-      margin-bottom: 24px;
-    }
-
-    .analytics-grid-sub {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 20px;
-      margin-bottom: 24px;
-    }
-
-    @media (max-width: 1024px) {
-      .analytics-grid-main { grid-template-columns: 1fr; }
-      .analytics-grid-sub { grid-template-columns: 1fr; }
-    }
-
-    .btn-dash-action {
-      background: #10b981;
-      color: #ffffff;
-      border: none;
-      padding: 9px 15px;
-      border-radius: 10px;
-      font-weight: 600;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      transition: all 0.2s ease;
-      font-size: 12px;
-    }
-    .btn-dash-action:hover {
-      background: #059669;
-      transform: translateY(-1px);
-    }
-
-    .dash-metric-btn, .dash-calc-btn {
-      background: rgba(255,255,255,0.08);
-      border: 1px solid rgba(255,255,255,0.12);
+    /* STYLING UNTUK INDIKATOR METRIK AKTIF MERAH BERCAHAYA */
+    .btn-metric {
+      background: #1a1a1a;
+      border: 1px solid rgba(255,255,255,0.1);
       color: #94a3b8;
-      padding: 6px 14px;
       border-radius: 8px;
-      font-size: 12px;
-      font-weight: 700;
+      padding: 10px;
       cursor: pointer;
       transition: all 0.2s ease;
-    }
-    .dash-metric-btn.active, .dash-calc-btn.active {
-      background: #10b981;
-      color: #ffffff;
-      border-color: #10b981;
-      box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
-    }
-
-    .dash-month-grid {
-      display: grid;
-      grid-template-columns: repeat(12, minmax(38px, 1fr));
+      display: flex;
+      flex-direction: column;
+      align-items: center;
       gap: 4px;
     }
-    @media (max-width: 768px) {
-      .dash-month-grid { grid-template-columns: repeat(6, 1fr); }
+    .btn-metric.active {
+      background: #dc2626 !important;
+      border: 1.5px solid #f59e0b !important;
+      color: #ffffff !important;
+      box-shadow: 0 0 12px rgba(220, 38, 38, 0.6);
+    }
+    .btn-metric.active .btn-metric-title,
+    .btn-metric.active small {
+      color: #ffffff !important;
+      font-weight: 800;
     }
 
-    .dash-month-pill {
-      background: rgba(255,255,255,0.06);
-      border: 1px solid rgba(255,255,255,0.12);
-      color: #94a3b8;
-      padding: 5px 2px;
-      border-radius: 6px;
-      font-size: 11px;
-      font-weight: 600;
-      cursor: pointer;
-      text-align: center;
-      -webkit-user-select: none;
-      user-select: none;
-      transition: all 0.2s ease;
+    .map-floating-widget-bar {
+      position: absolute;
+      bottom: 24px;
+      right: 20px;
+      z-index: 1000;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      align-items: flex-end;
+    }
+    .btn-floating-icon {
+      background: #1e293b;
+      color: #f59e0b;
+      border: 1.5px solid #dc2626;
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 4px;
+      cursor: pointer;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+      transition: transform 0.2s, background-color 0.2s;
     }
-    .dash-month-pill.active {
-      background: #10b981;
+    .btn-floating-icon:hover {
+      transform: scale(1.08);
+      background: #dc2626;
       color: #ffffff;
-      border-color: #10b981;
-      font-weight: 700;
-      box-shadow: 0 2px 8px rgba(16, 185, 129, 0.4);
     }
-    .dash-month-pill-chk {
-      width: 10px;
-      height: 10px;
-      border-radius: 2px;
-      border: 1px solid rgba(255,255,255,0.4);
-      display: inline-block;
-      background: transparent;
-    }
-    .dash-month-pill.active .dash-month-pill-chk {
-      background: #ffffff;
-      border-color: #ffffff;
-    }
-
-    .rank-list-item {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 10px 0;
-      border-bottom: 1px dashed rgba(255,255,255,0.08);
-      font-size: 13px;
-    }
-    .rank-list-item:last-child { border-bottom: none; }
-
-    /* FLOATING GLOBAL SEARCH BAR STYLE */
-    #global-search-container {
-      position: fixed;
-      top: 16px;
-      left: 50%;
-      transform: translateX(-50%);
-      z-index: 2000;
-      width: 90%;
-      max-width: 480px;
-    }
-
-    .search-input-box {
-      background: rgba(15, 41, 30, 0.95);
-      border: 1.5px solid #10b981;
-      -webkit-backdrop-filter: blur(12px);
-      backdrop-filter: blur(12px);
+    .floating-card-popup {
+      display: none;
+      background: rgba(26, 26, 26, 0.95);
+      border: 1px solid rgba(220, 38, 38, 0.4);
       border-radius: 12px;
-      padding: 8px 14px;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+      padding: 14px;
+      width: 280px;
+      box-shadow: 0 8px 25px rgba(0,0,0,0.7);
+      backdrop-filter: blur(8px);
+      margin-bottom: 6px;
     }
-
-    .search-input-box input {
-      background: transparent;
-      border: none;
-      outline: none;
-      color: #ffffff;
-      font-size: 13px;
-      width: 100%;
-    }
-
     .search-suggestions-list {
-      background: rgba(15, 41, 30, 0.98);
-      border: 1px solid rgba(16, 185, 129, 0.4);
-      -webkit-backdrop-filter: blur(12px);
-      backdrop-filter: blur(12px);
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      background: #1a1a1a;
+      border: 1px solid rgba(220,38,38,0.5);
       border-radius: 10px;
       margin-top: 6px;
-      max-height: 280px;
+      max-height: 260px;
       overflow-y: auto;
       display: none;
-      box-shadow: 0 12px 30px rgba(0,0,0,0.6);
+      z-index: 2000;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.8);
     }
-
     .suggestion-item {
       padding: 10px 14px;
-      border-bottom: 1px solid rgba(255,255,255,0.06);
+      border-bottom: 1px solid rgba(255,255,255,0.08);
       cursor: pointer;
-      transition: background 0.2s ease;
+      transition: background 0.2s;
     }
     .suggestion-item:hover {
-      background: rgba(16, 185, 129, 0.25);
+      background: rgba(220, 38, 38, 0.2);
     }
-    .suggestion-item:last-child { border-bottom: none; }
-
-    /* ITEM RUTE LIST */
-    .route-item-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 8px 10px;
-      background: #ffffff;
-      border: 1px solid #e2e8f0;
-      border-radius: 6px;
-      margin-bottom: 6px;
-      cursor: pointer;
-      transition: all 0.2s ease;
+    .suggestion-item:last-child {
+      border-bottom: none;
     }
-    .route-item-row:hover {
-      border-color: #0284c7;
-      background: #f0f9ff;
-      transform: translateX(2px);
+    #sidebar.pinned {
+      transform: translateX(0) !important;
     }
-    .route-badge-start {
-      background: #10b981;
-      color: #ffffff;
-      font-size: 10px;
-      font-weight: 700;
-      padding: 2px 6px;
-      border-radius: 4px;
+    .btn-pin.active {
+      color: #dc2626 !important;
+      background: rgba(220, 38, 38, 0.2) !important;
     }
-    .route-badge-step {
-      background: #0284c7;
-      color: #ffffff;
-      font-size: 10px;
-      font-weight: 700;
-      padding: 2px 6px;
-      border-radius: 4px;
+    #fullscreen-dashboard {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: #121212;
+      z-index: 8000;
+      padding: 24px;
+      overflow-y: auto;
+    }
+    #fullscreen-dashboard.active {
+      display: block !important;
     }
   </style>
 </head>
 <body>
 
-  <!-- MODAL LOGIN PORTAL RESMI -->
-  <div id="auth-modal" style="position: fixed; inset: 0; background: rgba(8, 24, 18, 0.96); z-index: 9999; display: flex; align-items: center; justify-content: center; -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);">
-    <div style="background: #ffffff; padding: 38px 32px; border-radius: 20px; width: 100%; max-width: 400px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); text-align: center; font-family: 'Segoe UI', sans-serif;">
-      <div style="display: inline-flex; padding: 14px; background: #ecfdf5; border-radius: 50%; margin-bottom: 12px; color: #10b981;">
-        <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+  <!-- MODAL LOGIN AUTH -->
+  <div id="auth-modal" style="position: fixed; inset: 0; background: rgba(18, 18, 18, 0.96); z-index: 99999; display: flex; align-items: center; justify-content: center;">
+    <div style="background: #1a1a1a; padding: 38px 32px; border-radius: 20px; width: 100%; max-width: 400px; text-align: center; font-family: 'Segoe UI', sans-serif; border: 1px solid rgba(220,38,38,0.3); box-shadow: 0 10px 30px rgba(0,0,0,0.8); position: relative; z-index: 100000;">
+      <div style="display: inline-flex; padding: 14px; background: rgba(220, 38, 38, 0.15); border-radius: 50%; margin-bottom: 12px; color: #dc2626;">
+        <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
       </div>
-      <h2 style="color: #1b4332; margin-bottom: 4px; font-size: 24px; font-weight: 700;">SpotRevenue Portal</h2>
-      <p style="color: #64748b; font-size: 13px; margin-bottom: 22px; line-height: 1.45;">Enterprise Location & Revenue Intelligence Platform</p>
+      <h2 style="color: #ffffff; margin-bottom: 4px; font-size: 24px; font-weight: 700;">SpotRevenue Portal</h2>
+      <p style="color: #f59e0b; font-size: 13px; margin-bottom: 20px; font-weight: 600;">Enterprise Location & Revenue Intelligence Platform</p>
       
-      <div style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px;">
-        <input type="text" id="auth-user-input" placeholder="Username (cth: admin)" style="width: 100%; padding: 12px 15px; border: 1.8px solid #cbd5e1; border-radius: 10px; font-size: 14px; outline: none; transition: all 0.25s ease;" onfocus="this.style.borderColor='#10b981';" onblur="this.style.borderColor='#cbd5e1';" />
-        <input type="password" id="auth-pin-input" placeholder="Password" style="width: 100%; padding: 12px 15px; border: 1.8px solid #cbd5e1; border-radius: 10px; font-size: 14px; outline: none; transition: all 0.25s ease;" onfocus="this.style.borderColor='#10b981';" onblur="this.style.borderColor='#cbd5e1';" />
-      </div>
+      <div id="auth-error-msg" style="display: none; background: rgba(220,38,38,0.2); border: 1px solid #dc2626; color: #fca5a5; padding: 10px 12px; border-radius: 8px; font-size: 12.5px; margin-bottom: 16px; text-align: center; font-weight: 600;"></div>
 
-      <button id="btn-submit-auth" style="width: 100%; background: #10b981; color: white; border: none; padding: 13px; border-radius: 10px; font-weight: 700; cursor: pointer; font-size: 14px; transition: background 0.2s ease;" onmouseover="this.style.background='#059669';" onmouseout="this.style.background='#10b981';">Masuk Sistem SpotRevenue</button>
+      <form id="auth-form" onsubmit="loginApp(event); return false;" style="display: flex; flex-direction: column; gap: 14px; margin-bottom: 16px;">
+        <input type="text" id="auth-user-input" value="admin" placeholder="Masukkan Username" style="width: 100%; padding: 12px 15px; background: #121212; color: #ffffff; border: 1.8px solid rgba(220,38,38,0.4); border-radius: 10px; font-size: 14px; outline: none; box-sizing: border-box;" autocomplete="off" />
+        
+        <div style="position: relative; width: 100%;">
+          <input type="password" id="auth-pin-input" value="spotrev2026" placeholder="Masukkan Password" style="width: 100%; padding: 12px 45px 12px 15px; background: #121212; color: #ffffff; border: 1.8px solid rgba(220,38,38,0.4); border-radius: 10px; font-size: 14px; outline: none; box-sizing: border-box;" autocomplete="off" />
+          <button type="button" id="btn-toggle-password" onclick="togglePasswordVisibility()" title="Lihat/Sembunyikan Password" style="position: absolute; right: 12px; top: 50%; transform: translateY(-50%); background: none; border: none; color: #f59e0b; cursor: pointer; padding: 0; display: flex; align-items: center; justify-content: center;">
+            <svg id="eye-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+          </button>
+        </div>
+
+        <button type="button" id="btn-submit-auth" onclick="loginApp(event)" style="width: 100%; background: #dc2626; color: white; border: none; padding: 13px; border-radius: 10px; font-weight: 700; cursor: pointer; font-size: 14px; margin-top: 4px; position: relative; z-index: 100001;">Masuk Sistem SpotRevenue</button>
+      </form>
       
-      <div id="auth-error-msg" style="color: #ef4444; font-size: 12px; margin-top: 14px; display: none; font-weight: 600;">Username atau Password Salah! Silakan coba lagi.</div>
-      
-      <div style="margin-top: 26px; font-size: 11px; color: #64748b; border-top: 1px solid #f1f5f9; padding-top: 16px;">
-        Lead Developer: <b style="color: #10b981;">Urai Ikhsan Fadhilah</b>
+      <div style="margin-top: 20px; font-size: 11px; color: #94a3b8; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 16px;">
+        Lead Developer: <b style="color: #f59e0b;">Urai Ikhsan Fadhilah</b>
       </div>
     </div>
   </div>
 
   <!-- FLOATING GLOBAL SEARCH BAR -->
-  <div id="global-search-container">
+  <div id="global-search-container" style="position: relative;">
     <div class="search-input-box">
-      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
       <input type="text" id="global-search-input" placeholder="Cari Nama Toko atau Kode Customer..." autocomplete="off" />
     </div>
     <div id="search-suggestions" class="search-suggestions-list"></div>
   </div>
 
-  <!-- DASHBOARD FULL SCREEN OVERLAY -->
-  <div id="fullscreen-dashboard" class="dash-animated">
-    <header class="dash-header">
-      <div class="dash-header-top">
-        <div style="display: flex; align-items: center; gap: 16px;">
-          <div style="background: rgba(16, 185, 129, 0.15); padding: 10px; border-radius: 14px; color: #10b981; display: flex; align-items: center; justify-content: center; border: 1px solid rgba(16,185,129,0.3);">
-            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 100 100">
-              <circle cx="50" cy="50" r="48" fill="#0f291e"/>
-              <path d="M50 18 A 20 20 0 0 0 30 38 C 30 52 50 72 50 72 C 50 72 70 52 70 38 A 20 20 0 0 0 50 18 Z" fill="#10b981"/>
-              <circle cx="50" cy="38" r="7" fill="#0f291e"/>
-              <rect x="25" y="75" width="12" height="10" fill="#a7f3d0"/>
-              <rect x="44" y="67" width="12" height="18" fill="#ffffff"/>
-              <rect x="63" y="59" width="12" height="26" fill="#10b981"/>
-            </svg>
-          </div>
-          <div>
-            <h1 style="font-size: 22px; font-weight: 700; color: #ffffff; margin: 0; letter-spacing: -0.3px;">SpotRevenue Executive Intelligence Dashboard</h1>
-            <p style="font-size: 12px; color: #94a3b8; margin: 3px 0 0 0;">Rekapan data teritorial & analisis kinerja usaha terpadu</p>
-          </div>
+  <!-- WIDGET FLOATING DI ATAS PETA -->
+  <div class="map-floating-widget-bar">
+    <div id="floating-month-card" class="floating-card-popup">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:6px;">
+        <div style="display:flex; align-items:center; gap:6px; color:#f59e0b; font-weight:700; font-size:12px;">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          <span>Filter Periode Bulan</span>
+        </div>
+        <button onclick="document.getElementById('floating-month-card').style.display='none'" style="background:none; border:none; color:#cbd5e1; cursor:pointer; font-weight:bold;">✕</button>
+      </div>
+
+      <div style="display:flex; flex-direction:column; gap:8px;">
+        <div>
+          <label style="font-size:10.5px; color:#cbd5e1; display:block; margin-bottom:2px;">Mode Kalkulasi:</label>
+          <select id="float-select-calc-mode" class="form-control" style="width:100%; padding:5px; background:#121212; color:#fff; border:1px solid #dc2626; border-radius:6px; font-size:11px;">
+            <option value="total">Total Penjualan</option>
+            <option value="avg">Rata-Rata / AVG per Bulan</option>
+          </select>
         </div>
 
-        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
-          <button id="btn-dash-toggle-heatmap" class="btn-dash-action" style="background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15);">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>
-            Heatmap Peta
-          </button>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px;">
+          <div>
+            <label style="font-size:10.5px; color:#cbd5e1; display:block; margin-bottom:2px;">Dari Bulan:</label>
+            <select id="float-select-bulan-awal" class="form-control" style="width:100%; padding:5px; background:#121212; color:#fff; border:1px solid #dc2626; border-radius:6px; font-size:11px;"></select>
+          </div>
+          <div>
+            <label style="font-size:10.5px; color:#cbd5e1; display:block; margin-bottom:2px;">Sampai Bulan:</label>
+            <select id="float-select-bulan-akhir" class="form-control" style="width:100%; padding:5px; background:#121212; color:#fff; border:1px solid #dc2626; border-radius:6px; font-size:11px;"></select>
+          </div>
+        </div>
+      </div>
+    </div>
 
-          <button id="btn-close-dashboard" class="btn-dash-action" style="background: #10b981;">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
-            Tutup & Buka Peta
+    <div id="floating-legend-card" class="floating-card-popup">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:6px;">
+        <div style="display:flex; align-items:center; gap:6px; color:#f59e0b; font-weight:700; font-size:12px;">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+          <span>Legenda Warna Kecamatan</span>
+        </div>
+        <button onclick="document.getElementById('floating-legend-card').style.display='none'" style="background:none; border:none; color:#cbd5e1; cursor:pointer; font-weight:bold;">✕</button>
+      </div>
+      <div id="float-legend-list" style="max-height: 180px; overflow-y: auto; font-size:11px;"></div>
+    </div>
+
+    <div style="display:flex; gap:8px;">
+      <button id="btn-toggle-float-month" class="btn-floating-icon" title="Buka Filter Bulan">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      </button>
+
+      <button id="btn-toggle-float-legend" class="btn-floating-icon" title="Buka Legenda Kecamatan">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- FULLSCREEN DASHBOARD OVERLAY -->
+  <div id="fullscreen-dashboard">
+    <header style="display: flex; flex-direction: column; gap: 16px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 16px; margin-bottom: 20px;">
+      <div style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
+        <div>
+          <h1 style="font-size: 22px; font-weight: 700; color: #ffffff; margin: 0;">SpotRevenue Executive Intelligence Dashboard</h1>
+          <p style="font-size: 12px; color: #f59e0b; margin-top: 3px; font-weight: 600;">Rekapan data teritorial & analisis kinerja usaha terpadu</p>
+        </div>
+
+        <div style="display: flex; gap: 12px; align-items: center;">
+          <div style="display: flex; gap: 6px; background: rgba(0,0,0,0.5); padding: 4px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.15);">
+            <button class="btn-dash-metric active" data-dash-metric="val" onclick="switchMetric('val', this)" style="background:#dc2626; color:white; border:none; padding:8px 16px; border-radius:8px; font-weight:700; cursor:pointer; font-size:12px;">VAL (Rp)</button>
+            <button class="btn-dash-metric" data-dash-metric="box" onclick="switchMetric('box', this)" style="background:transparent; color:#cbd5e1; border:none; padding:8px 16px; border-radius:8px; font-weight:700; cursor:pointer; font-size:12px;">BOX (Ktn)</button>
+            <button class="btn-dash-metric" data-dash-metric="uom" onclick="switchMetric('uom', this)" style="background:transparent; color:#cbd5e1; border:none; padding:8px 16px; border-radius:8px; font-weight:700; cursor:pointer; font-size:12px;">UOM (Pcs)</button>
+          </div>
+
+          <button id="btn-close-dashboard" onclick="closeDashboardUI()" style="background: #dc2626; color: white; border: none; padding: 10px 18px; border-radius: 10px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 8px;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+            <span>Tutup & Buka Peta</span>
           </button>
         </div>
       </div>
 
-      <div class="dash-header-controls">
-        <div style="display: flex; align-items: center; gap: 6px;">
-          <span style="font-size: 11px; color: #94a3b8; font-weight: 600;">Tahun:</span>
-          <select id="dash-select-tahun" title="Pilih Tahun Transaksi" aria-label="Pilih Tahun Transaksi" style="background: #0f291e; color: #a7f3d0; border: 1px solid rgba(16,185,129,0.4); padding: 5px 8px; border-radius: 6px; font-size: 12px; outline: none; font-weight: 700; cursor: pointer;">
-            <option value="">-- Semua Tahun --</option>
+      <!-- BAR FILTER LENGKAP PADA DASHBOARD -->
+      <div style="display: flex; gap: 16px; align-items: center; flex-wrap: wrap; background: rgba(255,255,255,0.04); padding: 12px 18px; border-radius: 12px; border: 1px solid rgba(220,38,38,0.3);">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          <label style="font-size: 11.5px; color: #f59e0b; font-weight: 700; white-space: nowrap;">Mode Kalkulasi:</label>
+          <select id="dash-select-calc-mode" style="background: #121212; color: #fff; border: 1px solid #dc2626; padding: 6px 12px; border-radius: 6px; font-size: 12px; outline: none; cursor: pointer;">
+            <option value="total">Total Penjualan</option>
+            <option value="avg">Rata-Rata / AVG per Bulan</option>
           </select>
         </div>
 
-        <div style="width: 1px; height: 20px; background: rgba(255,255,255,0.12);"></div>
-
-        <div style="display: flex; gap: 4px; background: rgba(255,255,255,0.05); padding: 3px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);">
-          <button type="button" class="dash-calc-btn active" data-dash-calc="total">TOTAL</button>
-          <button type="button" class="dash-calc-btn" data-dash-calc="avg">AVERAGE</button>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          <label style="font-size: 11.5px; color: #f59e0b; font-weight: 700; white-space: nowrap;">Bulan:</label>
+          <select id="dash-select-bulan-awal" style="background: #121212; color: #fff; border: 1px solid #dc2626; padding: 6px 10px; border-radius: 6px; font-size: 12px; outline: none; cursor: pointer;"></select>
+          <span style="color: #cbd5e1; font-size: 12px; font-weight: bold;">s/d</span>
+          <select id="dash-select-bulan-akhir" style="background: #121212; color: #fff; border: 1px solid #dc2626; padding: 6px 10px; border-radius: 6px; font-size: 12px; outline: none; cursor: pointer;"></select>
         </div>
 
-        <div style="width: 1px; height: 20px; background: rgba(255,255,255,0.12);"></div>
-
-        <div style="display: flex; gap: 4px; background: rgba(255,255,255,0.05); padding: 3px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);">
-          <button type="button" class="dash-metric-btn active" data-dash-metric="val">VALUE</button>
-          <button type="button" class="dash-metric-btn" data-dash-metric="box">BOX</button>
-          <button type="button" class="dash-metric-btn" data-dash-metric="uom">UOM</button>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          <label style="font-size: 11.5px; color: #f59e0b; font-weight: 700; white-space: nowrap;">Tahun:</label>
+          <select id="dash-select-tahun" style="background: #121212; color: #fff; border: 1px solid #dc2626; padding: 6px 12px; border-radius: 6px; font-size: 12px; outline: none; cursor: pointer;">
+            <option value="">-- Semua TAHUN --</option>
+          </select>
         </div>
-
-        <div style="width: 1px; height: 20px; background: rgba(255,255,255,0.12);"></div>
-
-        <div style="display: flex; align-items: center; gap: 8px; flex-grow: 1;">
-          <span style="font-size: 11px; color: #94a3b8; font-weight: 600; white-space: nowrap;">Pilih Bulan:</span>
-          <div class="dash-month-grid" style="flex-grow: 1;">
-            <div class="dash-month-pill active" data-dash-month="JAN"><span class="dash-month-pill-chk"></span>Jan</div>
-            <div class="dash-month-pill active" data-dash-month="FEB"><span class="dash-month-pill-chk"></span>Feb</div>
-            <div class="dash-month-pill active" data-dash-month="MAR"><span class="dash-month-pill-chk"></span>Mar</div>
-            <div class="dash-month-pill active" data-dash-month="APR"><span class="dash-month-pill-chk"></span>Apr</div>
-            <div class="dash-month-pill active" data-dash-month="MAY"><span class="dash-month-pill-chk"></span>May</div>
-            <div class="dash-month-pill active" data-dash-month="JUN"><span class="dash-month-pill-chk"></span>Jun</div>
-            <div class="dash-month-pill active" data-dash-month="JUL"><span class="dash-month-pill-chk"></span>Jul</div>
-            <div class="dash-month-pill active" data-dash-month="AUG"><span class="dash-month-pill-chk"></span>Aug</div>
-            <div class="dash-month-pill active" data-dash-month="SEP"><span class="dash-month-pill-chk"></span>Sep</div>
-            <div class="dash-month-pill active" data-dash-month="OCT"><span class="dash-month-pill-chk"></span>Oct</div>
-            <div class="dash-month-pill active" data-dash-month="NOV"><span class="dash-month-pill-chk"></span>Nov</div>
-            <div class="dash-month-pill active" data-dash-month="DEC"><span class="dash-month-pill-chk"></span>Dec</div>
-          </div>
-        </div>
-
       </div>
     </header>
 
     <div class="kpi-grid">
       <div class="dash-card">
-        <div style="display: flex; justify-content: space-between; color: #94a3b8; font-size: 12px;">
-          <span>Total Outlet Aktif</span>
-          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7"/><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><path d="M15 22v-4a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v4"/><path d="M2 7h20"/><path d="M10 12h4"/></svg>
-        </div>
+        <div style="color: #94a3b8; font-size: 12px;">Total Outlet Aktif</div>
         <div id="full-kpi-outlet" class="kpi-value-lg">0 Toko</div>
-        <div style="font-size: 11px; color: #64748b; margin-top: 4px;">Tersebar di wilayah terfilter</div>
       </div>
-
       <div class="dash-card">
-        <div style="display: flex; justify-content: space-between; color: #94a3b8; font-size: 12px;">
-          <span id="label-full-kpi-omset">Akumulasi Total (VALUE)</span>
-          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-        </div>
-        <div id="full-kpi-omset" class="kpi-value-lg" style="color: #34d399;">Rp 0</div>
-        <div id="sub-full-kpi-omset" style="font-size: 11px; color: #64748b; margin-top: 4px;">Berdasarkan periode bulan aktif</div>
+        <div style="color: #94a3b8; font-size: 12px;" id="kpi-label-omset">Akumulasi Total Value</div>
+        <div id="full-kpi-omset" class="kpi-value-lg" style="color: #ef4444;">Rp 0</div>
       </div>
-
       <div class="dash-card">
-        <div style="display: flex; justify-content: space-between; color: #94a3b8; font-size: 12px;">
-          <span>Rata-Rata Penjualan / Toko</span>
-          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
-        </div>
-        <div id="full-kpi-avg" class="kpi-value-lg" style="color: #60a5fa;">Rp 0</div>
-        <div style="font-size: 11px; color: #64748b; margin-top: 4px;">Rata-rata kontribusi toko</div>
+        <div style="color: #94a3b8; font-size: 12px;" id="kpi-label-avg">Rata-Rata Penjualan / Toko</div>
+        <div id="full-kpi-avg" class="kpi-value-lg" style="color: #38bdf8;">Rp 0</div>
       </div>
-
       <div class="dash-card">
-        <div style="display: flex; justify-content: space-between; color: #94a3b8; font-size: 12px;">
-          <span>Kecamatan Utama (Top Tier)</span>
-          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-        </div>
-        <div id="full-kpi-top-kec" class="kpi-value-lg" style="color: #fbbf24; font-size: 18px;">-</div>
-        <div style="font-size: 11px; color: #64748b; margin-top: 4px;">Wilayah dengan omset terbanyak</div>
+        <div style="color: #94a3b8; font-size: 12px;">Kecamatan Utama (Top Tier)</div>
+        <div id="full-kpi-top-kec" class="kpi-value-lg" style="color: #f59e0b; font-size: 18px;">-</div>
       </div>
     </div>
 
     <div class="analytics-grid-main">
       <div class="dash-card">
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
-          <h3 style="font-size: 15px; font-weight: 600; margin: 0; display: flex; align-items: center; gap: 8px;">
-            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>
-            Grafik Penjualan Top Portofolio Brand
-          </h3>
-          <span id="chart-metric-badge" style="font-size: 11px; color: #a7f3d0; background: rgba(16, 185, 129, 0.2); padding: 3px 8px; border-radius: 6px;">Metrik: VALUE | TOTAL</span>
-        </div>
+        <h3 style="font-size: 15px; font-weight: 600; margin-bottom: 16px;">Grafik Penjualan Top Portofolio Brand</h3>
         <div style="position: relative; height: 260px; width: 100%;">
           <canvas id="chart-top-brands"></canvas>
         </div>
       </div>
-
       <div class="dash-card">
-        <h3 style="font-size: 15px; font-weight: 600; margin: 0 0 12px 0; display: flex; align-items: center; gap: 8px;">
-          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
-          Filter Kinerja Toko
-        </h3>
-        <p style="font-size: 12px; color: #94a3b8; line-height: 1.4; margin-bottom: 16px;">Saring toko secara langsung berdasarkan kontribusi performanya:</p>
-
+        <h3 style="font-size: 15px; font-weight: 600; margin-bottom: 12px;">Filter Performa Toko</h3>
         <div style="display: flex; flex-direction: column; gap: 10px;">
-          <button type="button" class="btn-preset btn-perf-filter" data-perf="top" style="background: #065f46; color: white; border: none; padding: 12px; border-radius: 10px; font-size: 12px; cursor: pointer; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 8px;">
-            Top Tier (Pareto 20% Teratas)
-          </button>
-
-          <button type="button" class="btn-preset btn-perf-filter" data-perf="low" style="background: #991b1b; color: white; border: none; padding: 12px; border-radius: 10px; font-size: 12px; cursor: pointer; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 8px;">
-            Low Performer (Evaluasi Penjualan)
-          </button>
+          <button id="btn-filter-top-tier" style="background: #dc2626; color: white; border: none; padding: 12px; border-radius: 10px; font-weight: 600; cursor: pointer;">Top Tier (Pareto 20% Teratas)</button>
+          <button id="btn-filter-low-performer" style="background: #991b1b; color: white; border: none; padding: 12px; border-radius: 10px; font-weight: 600; cursor: pointer;">Low Performer (Evaluasi Penjualan)</button>
         </div>
       </div>
     </div>
 
     <div class="analytics-grid-sub">
       <div class="dash-card">
-        <h4 style="font-size: 14px; font-weight: 600; margin: 0 0 12px 0; color: #a7f3d0;">Top 5 Brand Terlaris</h4>
-        <div id="full-rank-brands">Memuat data brand...</div>
+        <h4 style="font-size: 14px; font-weight: 600; color: #f59e0b; margin-bottom: 12px;">Top 5 Brand Terlaris</h4>
+        <div id="full-rank-brands" style="font-size: 12px; color: #cbd5e1;">Memuat data brand...</div>
       </div>
-
       <div class="dash-card">
-        <h4 style="font-size: 14px; font-weight: 600; margin: 0 0 12px 0; color: #60a5fa;">Top 5 Wilayah Kecamatan</h4>
-        <div id="full-rank-kecamatan">Memuat data kecamatan...</div>
+        <h4 style="font-size: 14px; font-weight: 600; color: #38bdf8; margin-bottom: 12px;">Top 5 Wilayah Kecamatan</h4>
+        <div id="full-rank-kecamatan" style="font-size: 12px; color: #cbd5e1;">Memuat data kecamatan...</div>
       </div>
-
       <div class="dash-card">
-        <h4 style="font-size: 14px; font-weight: 600; margin: 0 0 12px 0; color: #fbbf24;">Top 5 Tim Salesperson</h4>
-        <div id="full-rank-sales">Memuat data tim sales...</div>
+        <h4 style="font-size: 14px; font-weight: 600; color: #ef4444; margin-bottom: 12px;">Top 5 Tim Salesperson</h4>
+        <div id="full-rank-sales" style="font-size: 12px; color: #cbd5e1;">Memuat data tim sales...</div>
       </div>
-    </div>
-
-    <footer style="margin-top: auto; padding-top: 18px; border-top: 1px solid rgba(255,255,255,0.08); display: flex; align-items: center; justify-content: space-between; font-size: 11px; color: #64748b;">
-      <div>SpotRevenue Enterprise Location & Revenue Intelligence v4.3</div>
-      <div>Lead Developer: <b style="color: #a7f3d0; font-weight: 600;">Urai Ikhsan Fadhilah</b></div>
-    </footer>
-  </div>
-
-  <div id="loading-overlay">
-    <div class="loading-box">
-      <div class="spinner"></div>
-      <h4 id="loading-title">Memproses Metrik Data</h4>
-      <p id="loading-msg">Harap tunggu sebentar...</p>
     </div>
   </div>
 
-  <div id="toast">Notifikasi Sistem</div>
-
+  <!-- TRIGGER ZONE HOVER SIDEBAR -->
   <div id="sidebar-trigger-zone" title="Arahkan kursor ke sini untuk membuka menu">
     <div class="trigger-bar"></div>
-    <span class="trigger-icon">
-      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
-    </span>
   </div>
 
   <!-- SIDEBAR UTAMA SPOTREVENUE -->
   <aside id="sidebar">
-    
     <header class="header">
       <div class="header-top">
         <div class="brand-title">
-          <svg class="brand-logo" xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+          <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
           <h1>SpotRevenue</h1>
         </div>
-        <button id="btn-pin-sidebar" class="btn-pin" title="Kunci Sidebar agar tetap terbuka">
-          <svg class="svg-icon" xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="17" x2="12" y2="22"/><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a3 3 0 0 0-6 0v3.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"/><circle cx="12" cy="4" r="2"/></svg>
+        <button id="btn-pin-sidebar" class="btn-pin" onclick="toggleSidebarPin()" title="Kunci Sidebar agar tetap terbuka">
+          <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="17" x2="12" y2="22"/><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a3 3 0 0 0-6 0v3.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"/><circle cx="12" cy="4" r="2"/></svg>
         </button>
       </div>
       <p class="tagline">Enterprise Location & Revenue Intelligence</p>
     </header>
 
-    <div class="module-nav-grid" style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px;">
-      <button class="btn-module-nav" id="btn-nav-dash-open" title="Buka Fullscreen Dashboard">
-        <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>
+    <div class="module-nav-grid">
+      <button class="btn-module-nav" id="btn-nav-dash-open" onclick="openDashboardUI()" title="Buka Fullscreen Dashboard">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>
         <span>Dash</span>
       </button>
 
-      <!-- DEFAULT TAB SIDEBAR: DATA MASTER -->
-      <button class="btn-module-nav active" data-modul="modul-data" title="Data Master">
-        <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+      <button class="btn-module-nav active" onclick="switchModulePane('modul-data', this)" title="Data Master">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
         <span>Data</span>
       </button>
 
-      <button class="btn-module-nav" data-modul="modul-wilayah" title="Filter Wilayah & Toko">
-        <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+      <button class="btn-module-nav" onclick="switchModulePane('modul-wilayah', this)" title="Filter Wilayah & Toko">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
         <span>Wilayah</span>
       </button>
 
-      <button class="btn-module-nav" data-modul="modul-spasial" title="Analisis Spasial & Radius">
-        <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
+      <button class="btn-module-nav" onclick="switchModulePane('modul-spasial', this)" title="Analisis Spasial & Radius">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
         <span>Spasial</span>
       </button>
 
-      <button class="btn-module-nav btn-highlight-idea" data-modul="modul-intelijen" title="Intelijen Spasial & Eksekutif">
-        <svg class="nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4"/><path d="M12 18v4"/><path d="M4.93 4.93l2.83 2.83"/><path d="M16.24 16.24l2.83 2.83"/><path d="M2 12h4"/><path d="M18 12h4"/><path d="M4.93 19.07l2.83-2.83"/><path d="M16.24 7.76l2.83-2.83"/><circle cx="12" cy="12" r="4"/></svg>
+      <button class="btn-module-nav" onclick="switchModulePane('modul-intelijen', this)" title="Intelijen Spasial & Eksekutif">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/><circle cx="12" cy="12" r="4"/></svg>
         <span>Intelijen</span>
       </button>
 
-      <button class="btn-module-nav" data-modul="modul-produk" title="Filter Produk & Brand">
-        <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>
+      <button class="btn-module-nav" onclick="switchModulePane('modul-produk', this)" title="Filter Produk & Brand">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>
         <span>Produk</span>
       </button>
 
-      <button class="btn-module-nav" data-modul="modul-detail" title="Detail & Profil">
-        <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+      <button class="btn-module-nav" onclick="switchModulePane('modul-detail', this)" title="Detail & Profil">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
         <span>Profil</span>
       </button>
     </div>
 
-    <div class="sidebar-scroll-content" style="-ms-overflow-style: none; scrollbar-width: none;">
-
-      <!-- MODUL 1: DATA MASTER (DEFAULT ACTIVE PANE) -->
+    <div class="sidebar-scroll-content">
+      <!-- MODUL DATA MASTER -->
       <div id="modul-data" class="module-content-pane active">
         <section class="section-card metric-card">
           <h3 class="section-title">Metrik Tampilan Peta</h3>
           <div class="metric-switch-grid">
-            <button class="btn-metric active" data-metric="val">
-              <span class="btn-metric-title">VALUE</span>
-              <small id="status-val">Belum Ada</small>
-            </button>
-            <button class="btn-metric" data-metric="box">
-              <span class="btn-metric-title">BOX</span>
-              <small id="status-box">Belum Ada</small>
-            </button>
-            <button class="btn-metric" data-metric="uom">
-              <span class="btn-metric-title">UOM</span>
-              <small id="status-uom">Belum Ada</small>
-            </button>
+            <button class="btn-metric active" data-metric="val" onclick="switchMetric('val', this)"><span class="btn-metric-title">VALUE</span><small id="status-val">Belum Ada</small></button>
+            <button class="btn-metric" data-metric="box" onclick="switchMetric('box', this)"><span class="btn-metric-title">BOX</span><small id="status-box">Belum Ada</small></button>
+            <button class="btn-metric" data-metric="uom" onclick="switchMetric('uom', this)"><span class="btn-metric-title">UOM</span><small id="status-uom">Belum Ada</small></button>
           </div>
         </section>
 
@@ -652,625 +422,246 @@
             <label for="input-uom" class="btn-sm-upload" id="label-uom">Upload UOM</label>
           </div>
 
-          <button id="btn-reset-db" class="btn-reset-danger">
-            Reset & Bersihkan Memori Peta
-          </button>
+          <button id="btn-reset-db" class="btn-reset-danger">Reset & Bersihkan Memori Peta</button>
         </section>
       </div>
 
-      <!-- MODUL 2: WILAYAH -->
+      <!-- MODUL WILAYAH -->
       <div id="modul-wilayah" class="module-content-pane">
         <section class="section-card">
-          <h3 class="section-title">Filter Wilayah & Karakter Toko</h3>
-          
-          <div class="form-group">
-            <label for="select-provinsi">Provinsi (38 Provinsi)</label>
-            <select id="select-provinsi" class="form-control" title="Pilih Provinsi" aria-label="Pilih Provinsi"><option value="">-- Semua Provinsi --</option></select>
-          </div>
-
-          <div class="form-group">
-            <label for="select-kabupaten">Kabupaten / Kota (KODYA)</label>
-            <select id="select-kabupaten" class="form-control" title="Pilih Kabupaten atau Kota" aria-label="Pilih Kabupaten atau Kota" disabled><option value="">-- Semua Kabupaten/Kota --</option></select>
-          </div>
-
-          <div class="form-group">
-            <label for="select-kecamatan">Kecamatan</label>
-            <select id="select-kecamatan" class="form-control" title="Pilih Kecamatan" aria-label="Pilih Kecamatan" disabled><option value="">-- Semua Kecamatan --</option></select>
-          </div>
-
-          <div class="form-group">
-            <label for="select-rayon">Rayon</label>
-            <select id="select-rayon" class="form-control" title="Pilih Rayon" aria-label="Pilih Rayon" disabled><option value="">-- Semua Rayon --</option></select>
-          </div>
-
-          <div class="form-group">
-            <label for="select-class">Class Outlet</label>
-            <select id="select-class" class="form-control" title="Pilih Class Outlet" aria-label="Pilih Class Outlet" disabled><option value="">-- Semua Class --</option></select>
-          </div>
-
-          <div class="form-group">
-            <label for="select-tipe">Tipe Outlet</label>
-            <select id="select-tipe" class="form-control" title="Pilih Tipe Outlet" aria-label="Pilih Tipe Outlet" disabled><option value="">-- Semua Tipe --</option></select>
-          </div>
-
-          <div class="form-group">
-            <label for="select-jenis">Jenis Outlet</label>
-            <select id="select-jenis" class="form-control" title="Pilih Jenis Outlet" aria-label="Pilih Jenis Outlet" disabled><option value="">-- Semua Jenis --</option></select>
-          </div>
-        </section>
-
-        <section class="section-card">
-          <h3 class="section-title">Filter Periode Bulan (Omset & Average)</h3>
-
-          <div class="form-group">
-            <label>Tombol Pintas Triwulan / Preset:</label>
-            <div class="month-preset-grid">
-              <button type="button" class="btn-preset active" data-preset="all">Semua (12B)</button>
-              <button type="button" class="btn-preset" data-preset="q1">Q1 (Jan-Mar)</button>
-              <button type="button" class="btn-preset" data-preset="q2">Q2 (Apr-Jun)</button>
-              <button type="button" class="btn-preset" data-preset="q3">Q3 (Jul-Sep)</button>
-              <button type="button" class="btn-preset" data-preset="q4">Q4 (Okt-Des)</button>
-            </div>
-
-            <label style="margin-top: 8px;">Pilih Bulan Transaksi:</label>
-            <div class="month-pills-grid">
-              <button type="button" class="btn-month-pill active" data-month="JAN">Jan</button>
-              <button type="button" class="btn-month-pill active" data-month="FEB">Feb</button>
-              <button type="button" class="btn-month-pill active" data-month="MAR">Mar</button>
-              <button type="button" class="btn-month-pill active" data-month="APR">Apr</button>
-              <button type="button" class="btn-month-pill active" data-month="MAY">Mei</button>
-              <button type="button" class="btn-month-pill active" data-month="JUN">Jun</button>
-              <button type="button" class="btn-month-pill active" data-month="JUL">Jul</button>
-              <button type="button" class="btn-month-pill active" data-month="AUG">Ags</button>
-              <button type="button" class="btn-month-pill active" data-month="SEP">Sep</button>
-              <button type="button" class="btn-month-pill active" data-month="OCT">Okt</button>
-              <button type="button" class="btn-month-pill active" data-month="NOV">Nov</button>
-              <button type="button" class="btn-month-pill active" data-month="DEC">Des</button>
-            </div>
-          </div>
+          <h3 class="section-title">Filter Wilayah & Toko</h3>
+          <div class="form-group"><label for="select-provinsi">Provinsi</label><select id="select-provinsi" class="form-control"><option value="">-- Semua Provinsi --</option></select></div>
+          <div class="form-group"><label for="select-kabupaten">Kabupaten / Kota</label><select id="select-kabupaten" class="form-control" disabled><option value="">-- Semua Kab/Kota --</option></select></div>
+          <div class="form-group"><label for="select-kecamatan">Kecamatan</label><select id="select-kecamatan" class="form-control" disabled><option value="">-- Semua Kecamatan --</option></select></div>
+          <div class="form-group"><label for="select-rayon">Rayon</label><select id="select-rayon" class="form-control" disabled><option value="">-- Semua Rayon --</option></select></div>
+          <div class="form-group"><label for="select-class">Class Outlet</label><select id="select-class" class="form-control" disabled><option value="">-- Semua Class --</option></select></div>
+          <div class="form-group"><label for="select-tipe">Tipe Outlet</label><select id="select-tipe" class="form-control" disabled><option value="">-- Semua Tipe --</option></select></div>
+          <div class="form-group"><label for="select-jenis">Jenis Outlet</label><select id="select-jenis" class="form-control" disabled><option value="">-- Semua Jenis --</option></select></div>
         </section>
 
         <section class="section-card">
           <h3 class="section-title">Filter Tim Sales & Tahun</h3>
-
-          <div class="form-group">
-            <label for="select-divisi-sales">Divisi Salesperson</label>
-            <select id="select-divisi-sales" class="form-control" title="Pilih Divisi Salesperson" aria-label="Pilih Divisi Salesperson" disabled><option value="">-- Semua Divisi Sales --</option></select>
-          </div>
-
-          <div class="form-group">
-            <label for="select-category-sales">Category Salesperson</label>
-            <select id="select-category-sales" class="form-control" title="Pilih Kategori Salesperson" aria-label="Pilih Kategori Salesperson" disabled><option value="">-- Semua Kategori Sales --</option></select>
-          </div>
-
-          <div class="form-group">
-            <label for="select-salesperson">Salesperson Number</label>
-            <select id="select-salesperson" class="form-control" title="Pilih Salesperson Number" aria-label="Pilih Salesperson Number" disabled><option value="">-- Semua Salesperson --</option></select>
-          </div>
-
-          <div class="form-group">
-            <label for="select-tahun">Tahun Transaksi</label>
-            <select id="select-tahun" class="form-control" title="Pilih Tahun Transaksi" aria-label="Pilih Tahun Transaksi" disabled><option value="">-- Semua Tahun --</option></select>
-          </div>
+          <div class="form-group"><label for="select-divisi-sales">Divisi Sales</label><select id="select-divisi-sales" class="form-control" disabled><option value="">-- Semua Divisi --</option></select></div>
+          <div class="form-group"><label for="select-category-sales">Category Sales</label><select id="select-category-sales" class="form-control" disabled><option value="">-- Semua Kategori --</option></select></div>
+          <div class="form-group"><label for="select-salesperson">Salesperson</label><select id="select-salesperson" class="form-control" disabled><option value="">-- Semua Sales --</option></select></div>
+          <div class="form-group"><label for="select-tahun">Tahun</label><select id="select-tahun" class="form-control" disabled><option value="">-- Semua Tahun --</option></select></div>
         </section>
       </div>
 
-      <!-- MODUL 3: SPASIAL -->
+      <!-- MODUL SPASIAL -->
       <div id="modul-spasial" class="module-content-pane">
-        <section class="section-card" style="background: rgba(16,185,129,0.06); border: 1px solid rgba(16,185,129,0.25);">
-          <h3 class="section-title" style="color: #059669;">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
-            Toko Terpilih pada Peta
-          </h3>
-          <div id="spasial-selected-outlet-name" style="font-weight: 700; color: #1e293b; font-size: 13px;">
-            Belum ada toko terpilih. Klik salah satu titik toko pada peta!
-          </div>
+        <section class="section-card">
+          <h3 class="section-title">Toko Terpilih</h3>
+          <div id="spasial-selected-outlet-name" style="font-size:12px; color:#ffffff;">Klik salah satu titik toko pada peta!</div>
         </section>
 
-        <section class="section-card" style="margin-top: 14px;">
-          <h3 class="section-title">
-            <svg class="card-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
-            Zona Cakupan Pasar (Catchment Radius)
-          </h3>
-          <p class="text-sub">Hitung jangkauan dan kepadatan toko terdekat dari lokasi pilihan:</p>
-
-          <div style="margin-top: 10px;">
-            <label style="font-size: 11px; color: #64748b; font-weight: 600; display: block; margin-bottom: 4px;">Pilih Radius Area:</label>
-            <select id="select-buffer-radius" class="form-control" title="Pilih Radius Area" aria-label="Pilih Radius Area">
-              <option value="0">Nonaktifkan Lingkaran Radius</option>
-              <option value="500">Radius 500 Meter</option>
-              <option value="1000" selected>Radius 1 Kilometer</option>
-              <option value="3000">Radius 3 Kilometer</option>
-              <option value="5000">Radius 5 Kilometer</option>
-            </select>
-          </div>
-
-          <div id="buffer-analysis-result" style="margin-top: 12px; padding: 12px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 12px; color: #1e293b; line-height: 1.5; font-weight: 500;">
-            Petunjuk: Klik salah satu toko pada peta, lalu tentukan radius untuk menampilkan area jangkauan pada peta secara visual.
-          </div>
+        <section class="section-card">
+          <h3 class="section-title">Catchment Radius</h3>
+          <select id="select-buffer-radius" class="form-control">
+            <option value="0">Nonaktifkan Radius</option>
+            <option value="1000" selected>Radius 1 Kilometer</option>
+            <option value="3000">Radius 3 Kilometer</option>
+            <option value="5000">Radius 5 Kilometer</option>
+          </select>
+          <div id="buffer-analysis-result" style="margin-top: 10px; font-size: 11px; color:#cbd5e1;">Pilih toko untuk melihat radius.</div>
         </section>
 
-        <section class="section-card" style="margin-top: 14px;">
-          <h3 class="section-title">
-            <svg class="card-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-            Evaluasi Coverage Gap & Potensi Wilayah
-          </h3>
-          <p class="text-sub">Menganalisis sebaran dan kontribusi omset antar kecamatan terfilter:</p>
-
-          <button id="btn-check-cannibalization" style="width: 100%; background: #d97706; color: white; border: none; padding: 10px; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; margin-top: 10px; display: flex; align-items: center; justify-content: center; gap: 6px;">
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-            🔍 Analisis Coverage Gap & Potensi Wilayah
-          </button>
-        </section>
-
-        <section class="section-card" style="margin-top: 14px; border: 1.5px solid #000000; background: #f8fafc;">
-          <h3 class="section-title" style="color: #000000;">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-            Audit Anomali Koordinat Outlet
-          </h3>
-          <p class="text-sub" style="color: #334155;">
-            Deteksi otomatis toko yang koordinatnya berada di laut, luar Indonesia, atau menyimpang jauh:
-          </p>
-
-          <div style="background: #ffffff; padding: 10px; border-radius: 8px; margin-top: 10px; border: 1px solid #cbd5e1;">
-            <div style="font-weight: 700; color: #0f172a; font-size: 11px; margin-bottom: 6px;">Opsi Parameter Audit:</div>
-            
-            <div style="margin-bottom: 6px;">
-              <label style="font-size: 10.5px; color: #64748b; display: block; margin-bottom: 2px; font-weight: 600;">Cakupan Target Toko:</label>
-              <select id="select-audit-scope" title="Cakupan Target Toko Audit" aria-label="Cakupan Target Toko Audit" style="width: 100%; background: #f8fafc; color: #0f172a; border: 1px solid #94a3b8; padding: 5px; border-radius: 4px; font-size: 11px; font-weight: 600;">
-                <option value="filtered" selected>Hanya Toko Terfilter saat ini</option>
-                <option value="all">Seluruh Master Data Toko</option>
-              </select>
-            </div>
-
-            <div>
-              <label style="font-size: 10.5px; color: #64748b; display: block; margin-bottom: 2px; font-weight: 600;">Kategori Jenis Anomali:</label>
-              <select id="select-audit-type" title="Kategori Jenis Anomali Audit" aria-label="Kategori Jenis Anomali Audit" style="width: 100%; background: #f8fafc; color: #0f172a; border: 1px solid #94a3b8; padding: 5px; border-radius: 4px; font-size: 11px; font-weight: 600;">
-                <option value="all" selected>Semua Jenis Anomali</option>
-                <option value="zero">Hanya Koordinat Kosong / Nol (0,0)</option>
-                <option value="ocean">Hanya Area Lautan / Luar Pesisir</option>
-                <option value="dist">Hanya Penyimpangan Jarak Pusat Kodya</option>
-              </select>
-            </div>
+        <section class="section-card">
+          <h3 class="section-title">Audit Anomali Koordinat</h3>
+          <div style="display: flex; gap: 8px; margin-top: 8px;">
+            <button id="btn-run-audit" style="flex:1; background:#dc2626; color:white; border:none; padding:9px; border-radius:6px; font-weight:700; cursor:pointer;">Jalankan Audit</button>
           </div>
-
-          <div style="display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap;">
-            <button id="btn-run-anomaly-audit" style="flex: 1; background: #000000; color: white; border: none; padding: 11px; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;">
-              <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-              Jalankan Audit Anomali
-            </button>
-
-            <button id="btn-stop-anomaly-audit" style="background: #dc2626; color: white; border: none; padding: 11px 14px; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; display: none; align-items: center; justify-content: center; gap: 6px;">
-              Matikan Audit
-            </button>
-
-            <button id="btn-export-anomaly-excel" style="background: #15803d; color: white; border: none; padding: 11px 14px; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; display: none; align-items: center; justify-content: center; gap: 6px;">
-              <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-              Export Excel
-            </button>
-          </div>
-
-          <div id="anomaly-audit-results" style="margin-top: 12px; max-height: 260px; overflow-y: auto;"></div>
+          <div id="audit-anomali-result" style="margin-top: 10px;"></div>
         </section>
       </div>
 
-      <!-- MODUL 4: INTELIJEN & ANALITIK LANJUTAN -->
+      <!-- MODUL INTELIJEN -->
       <div id="modul-intelijen" class="module-content-pane">
-        <div class="module-header" style="margin-bottom: 12px;">
-          <div class="module-title" style="display: flex; align-items: center; justify-content: space-between;">
-            <h3 style="font-size: 14px; font-weight: 700; color: #1e293b; display: flex; align-items: center; gap: 6px;">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/><circle cx="12" cy="12" r="4"/></svg>
-              Intelijen Spasial &amp; Eksekutif
-            </h3>
-            <span class="badge-tech" style="background: rgba(16, 185, 129, 0.15); color: #059669; font-weight: 700; font-size: 10px; padding: 2px 8px; border-radius: 12px;">Real-Time Engine</span>
+        <section class="section-card">
+          <h3 class="section-title">Executive Summary Engine</h3>
+          <button id="btn-generate-ai-summary" style="width:100%; background:#dc2626; color:white; border:none; padding:8px; border-radius:6px; font-weight:700; cursor:pointer; margin-bottom:8px;">Generate Insight</button>
+          <div id="ai-summary-output" style="font-size:11.5px; color:#ffffff; padding:10px; background:rgba(0,0,0,0.4); border-radius:6px;">Tekan tombol untuk menghasilkan insight real-time.</div>
+        </section>
+
+        <section class="section-card">
+          <h3 class="section-title">Matriks Kuadran Performa Toko (BCG)</h3>
+          <div class="bcg-matrix-grid">
+            <div class="bcg-quad star" data-quad="star"><div class="quad-header">Star</div><div class="quad-value" id="bcg-val-star">0</div><div class="quad-desc">Omset Tinggi</div></div>
+            <div class="bcg-quad cow" data-quad="cow"><div class="quad-header">Cash Cows</div><div class="quad-value" id="bcg-val-cow">0</div><div class="quad-desc">Omset Stabil</div></div>
+            <div class="bcg-quad question" data-quad="question"><div class="quad-header">Potensial</div><div class="quad-value" id="bcg-val-question">0</div><div class="quad-desc">Perlu Dorongan</div></div>
+            <div class="bcg-quad risk" data-quad="risk"><div class="quad-header">Underperform</div><div class="quad-value" id="bcg-val-risk">0</div><div class="quad-desc">Evaluasi</div></div>
           </div>
-        </div>
-
-        <!-- FITUR 1: AI EXECUTIVE SUMMARY GENERATOR -->
-        <div class="section-card">
-          <div class="section-title">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-            Executive Summary Engine
-          </div>
-          <button id="btn-generate-ai-summary" class="btn-action-primary" style="width: 100%; background: #10b981; color: white; border: none; padding: 10px; border-radius: 8px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.85.83 6.72 2.24"/><polyline points="21 3 21 9 15 9"/></svg>
-            Perbarui Insight Real-Time
-          </button>
-          <div id="ai-summary-output" class="summary-box-output" style="margin-top: 8px; font-size: 11px; color: #64748b;">
-            <span class="placeholder-text">Analisis sedang memuat data terfilter...</span>
-          </div>
-        </div>
-
-        <!-- FITUR 2: BCG MATRIX / KUADRAN PERFORMANCE TOKO -->
-        <div class="section-card" style="margin-top: 12px;">
-          <div class="section-title">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="12" y1="3" x2="12" y2="21"/><line x1="3" y1="12" x2="21" y2="12"/></svg>
-            Matriks Kuadran Performa Toko
-          </div>
-          <div class="bcg-matrix-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px;">
-            <div class="bcg-quad star" style="background: rgba(245, 158, 11, 0.1); padding: 8px; border-radius: 6px; border: 1px solid rgba(245, 158, 11, 0.3);">
-              <div class="quad-header" style="font-size: 11px; font-weight: 700; color: #d97706; display: flex; align-items: center; gap: 4px;">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-                Star Outlets
-              </div>
-              <div id="quad-star-count" class="quad-value" style="font-size: 16px; font-weight: 800; color: #b45309; margin-top: 2px;">0 Toko</div>
-              <div class="quad-desc" style="font-size: 9.5px; color: #78350f;">Omset Tinggi &amp; Rutin Belanja</div>
-            </div>
-
-            <div class="bcg-quad cow" style="background: rgba(16, 185, 129, 0.1); padding: 8px; border-radius: 6px; border: 1px solid rgba(16, 185, 129, 0.3);">
-              <div class="quad-header" style="font-size: 11px; font-weight: 700; color: #059669; display: flex; align-items: center; gap: 4px;">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><line x1="12" y1="18" x2="12" y2="6"/></svg>
-                Cash Cows
-              </div>
-              <div id="quad-cow-count" class="quad-value" style="font-size: 16px; font-weight: 800; color: #047857; margin-top: 2px;">0 Toko</div>
-              <div class="quad-desc" style="font-size: 9.5px; color: #064e3b;">Omset Tinggi &amp; Belanja Pasif</div>
-            </div>
-
-            <div class="bcg-quad question" style="background: rgba(59, 130, 246, 0.1); padding: 8px; border-radius: 6px; border: 1px solid rgba(59, 130, 246, 0.3);">
-              <div class="quad-header" style="font-size: 11px; font-weight: 700; color: #2563eb; display: flex; align-items: center; gap: 4px;">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-                Potensial
-              </div>
-              <div id="quad-question-count" class="quad-value" style="font-size: 16px; font-weight: 800; color: #1d4ed8; margin-top: 2px;">0 Toko</div>
-              <div class="quad-desc" style="font-size: 9.5px; color: #1e3a8a;">Omset Rendah &amp; Rutin Belanja</div>
-            </div>
-
-            <div class="bcg-quad risk" style="background: rgba(239, 68, 68, 0.1); padding: 8px; border-radius: 6px; border: 1px solid rgba(239, 68, 68, 0.3);">
-              <div class="quad-header" style="font-size: 11px; font-weight: 700; color: #dc2626; display: flex; align-items: center; gap: 4px;">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-                Underperform
-              </div>
-              <div id="quad-risk-count" class="quad-value" style="font-size: 16px; font-weight: 800; color: #b91c1c; margin-top: 2px;">0 Toko</div>
-              <div class="quad-desc" style="font-size: 9.5px; color: #7f1d1d;">Omset Rendah &amp; Jarang Belanja</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- FITUR UTAMA: OPTIMASI RUTE TOP OUTLET TERDEKAT -->
-        <div class="section-card" style="margin-top: 12px;">
-          <div class="section-title">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>
-            Optimasi Rute Kunjungan Top Outlet Terdekat
-          </div>
-          <p class="text-sub" style="color: #64748b; font-size: 11px; margin-bottom: 10px; margin-top: 4px;">
-            Klik salah satu toko di peta sebagai acuan awal, lalu sistem akan mengurutkan toko-toko terdekat secara instan.
-          </p>
-
-          <div style="margin-bottom: 10px;">
-            <label style="font-size: 10.5px; color: #64748b; font-weight: 600; display: block; margin-bottom: 4px;">Batas Target Outlet Terdekat:</label>
-            <select id="select-route-limit" class="form-control" title="Batas Jumlah Toko Rute" aria-label="Batas Jumlah Toko Rute" style="padding: 6px; width: 100%;">
-              <option value="5">Top 5 Outlet Terdekat</option>
-              <option value="10" selected>Top 10 Outlet Terdekat</option>
-              <option value="15">Top 15 Outlet Terdekat</option>
-              <option value="20">Top 20 Outlet Terdekat</option>
-              <option value="25">Top 25 Outlet Terdekat</option>
-            </select>
-          </div>
-
-          <button id="btn-generate-route" style="width: 100%; background: #0284c7; color: white; border: none; padding: 11px; border-radius: 8px; font-weight: 700; font-size: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: background 0.2s ease;" onmouseover="this.style.background='#0369a1';" onmouseout="this.style.background='#0284c7';">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>
-            🎯 Hitung & Tampilkan Top Outlet Terdekat
-          </button>
-
-          <div id="route-steps-container" class="route-steps-box" style="margin-top: 10px; padding: 10px; background: rgba(0,0,0,0.03); border: 1px dashed #cbd5e1; border-radius: 8px; font-size: 11px; max-height: 250px; overflow-y: auto;">
-            <span class="placeholder-text" style="color: #64748b;">Petunjuk: Klik salah satu toko pada peta, lalu tekan tombol "Hitung & Tampilkan Top Outlet Terdekat".</span>
-          </div>
-        </div>
-
-        <!-- FITUR PRINT REPORT PDF & PWA STATUS -->
-        <div class="section-card" style="margin-top: 12px;">
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-            <button id="btn-print-pdf-report" style="background: #1e293b; color: white; border: none; padding: 10px; border-radius: 8px; font-weight: 700; font-size: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
-              Cetak PDF
-            </button>
-            <div id="pwa-status-badge" style="background: rgba(16, 185, 129, 0.15); color: #047857; padding: 10px; border-radius: 8px; font-weight: 700; font-size: 11px; display: flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid rgba(16, 185, 129, 0.3);">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>
-              <span id="pwa-status-text">PWA: Ready</span>
-            </div>
-          </div>
-        </div>
+        </section>
       </div>
 
-      <!-- MODUL 5: PRODUK -->
+      <!-- MODUL PRODUK -->
       <div id="modul-produk" class="module-content-pane">
         <section class="section-card">
           <h3 class="section-title">Filter Portofolio Produk</h3>
-
-          <div class="form-group">
-            <label for="select-grup">Grup Produk</label>
-            <select id="select-grup" class="form-control" title="Pilih Grup Produk" aria-label="Pilih Grup Produk" disabled><option value="">-- Semua Grup --</option></select>
-          </div>
-
-          <div class="form-group">
-            <label for="select-brand">Brand Produk</label>
-            <select id="select-brand" class="form-control" title="Pilih Brand Produk" aria-label="Pilih Brand Produk" disabled><option value="">-- Semua Brand --</option></select>
-          </div>
-
-          <div class="form-group">
-            <label for="select-subbrand">Subbrand</label>
-            <select id="select-subbrand" class="form-control" title="Pilih Subbrand" aria-label="Pilih Subbrand" disabled><option value="">-- Semua Subbrand --</option></select>
-          </div>
-
-          <div class="form-group">
-            <label for="select-subbrand-list">Subbrand List (Varian SKU)</label>
-            <select id="select-subbrand-list" class="form-control" title="Pilih Varian SKU" aria-label="Pilih Varian SKU" disabled><option value="">-- Semua Varian SKU --</option></select>
-          </div>
+          <div class="form-group"><label for="select-grup">Grup Produk</label><select id="select-grup" class="form-control" disabled><option value="">-- Semua Grup --</option></select></div>
+          <div class="form-group"><label for="select-brand">Brand Produk</label><select id="select-brand" class="form-control" disabled><option value="">-- Semua Brand --</option></select></div>
+          <div class="form-group"><label for="select-subbrand">Subbrand</label><select id="select-subbrand" class="form-control" disabled><option value="">-- Semua Subbrand --</option></select></div>
         </section>
       </div>
 
-      <!-- MODUL 6: DETAIL PROFIL -->
+      <!-- MODUL PROFIL -->
       <div id="modul-detail" class="module-content-pane">
-        <section id="outlet-detail-card" class="section-card detail-card">
-          <h3 class="section-title" id="outlet-nama">Pilih Outlet pada Peta</h3>
-          <p id="outlet-id" class="text-sub">Kode Customer: -</p>
-          <p id="outlet-alamat" class="text-body" style="margin-top: 4px; font-size: 12px; color: #475569;">Klik salah satu titik lingkaran pada peta untuk melihat rincian toko ini.</p>
+        <section class="section-card">
+          <h3 class="section-title" id="profil-outlet-nama" style="font-size: 14px; color: #ffffff;">Pilih Outlet pada Peta</h3>
+          <p id="profil-outlet-kode" style="font-size:11px; color:#f59e0b; margin-bottom: 8px;">Kode Customer: -</p>
           
-          <div class="info-grid">
-            <div><span>Kab/Kota:</span> <strong id="outlet-kodya">-</strong></div>
-            <div><span>Kecamatan:</span> <strong id="outlet-kecamatan">-</strong></div>
-            <div><span>Kelas:</span> <strong id="outlet-kelas">-</strong></div>
-            <div><span>Tipe:</span> <strong id="outlet-tipe">-</strong></div>
-            <div class="grid-full"><span>Salesman:</span> <strong id="outlet-salesman">-</strong></div>
-          </div>
-
-          <div class="omset-box" style="margin-top: 12px;">
-            <div class="omset-label" id="active-metric-label">Total Omset Bulan Terpilih:</div>
-            <div id="outlet-omset" class="omset-val">0</div>
-            <div class="omset-badge" id="selected-months-badge">12 Bulan Aktif</div>
-          </div>
-
-          <div class="avg-box">
-            <div class="avg-label">Rata-Rata Omset / Bulan:</div>
-            <div id="outlet-avg-omset" class="avg-val">0</div>
-          </div>
-
-          <div style="margin-top: 10px;">
-            <strong style="font-size: 0.78rem; color: #334155;">Top Brand (Metrik Aktif):</strong>
-            <ul id="outlet-top-brands" class="brand-list"></ul>
+          <div style="font-size: 11px; color: #cbd5e1; line-height: 1.6; border-top: 1px dashed rgba(255,255,255,0.15); padding-top: 8px;">
+            <div>Salesman Code(s): <b id="profil-outlet-salesman" style="color:#ffffff;">-</b></div>
+            <div>Kabupaten/Kota: <b id="profil-outlet-kabupaten" style="color:#ffffff;">-</b></div>
+            <div>Kecamatan: <b id="profil-outlet-kecamatan" style="color:#ffffff;">-</b></div>
+            <div style="margin-top: 4px;">Alamat: <span id="profil-outlet-alamat" style="color:#e2e8f0;">Detail alamat akan muncul di sini.</span></div>
           </div>
         </section>
 
-        <section class="section-card coord-card">
-          <h3 class="section-title">
-            <svg class="card-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="22" y1="12" x2="18" y2="12"/><line x1="6" y1="12" x2="2" y2="12"/><line x1="12" y1="6" x2="12" y2="2"/><line x1="12" y1="22" x2="12" y2="18"/></svg>
-            Pemantau Titik Koordinat
-          </h3>
-          <div class="coord-row">
-            <span>Latitude:</span> <strong id="val-lat" class="coord-val">-</strong>
+        <section class="section-card">
+          <h3 class="section-title">Ringkasan Penjualan</h3>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; text-align: center;">
+            <div style="background: rgba(0,0,0,0.4); padding: 8px; border-radius: 8px; border: 1px solid rgba(220,38,38,0.3);">
+              <small style="font-size: 9.5px; color: #cbd5e1; display: block;" id="label-profil-total">TOTAL VALUE</small>
+              <b id="profil-outlet-total-omset" style="font-size: 12px; color: #ef4444; display: block; margin-top: 2px;">Rp 0</b>
+            </div>
+            <div style="background: rgba(0,0,0,0.4); padding: 8px; border-radius: 8px; border: 1px solid rgba(245,158,11,0.3);">
+              <small style="font-size: 9.5px; color: #cbd5e1; display: block;" id="label-profil-avg">RATA-RATA / BLN</small>
+              <b id="profil-outlet-avg-omset" style="font-size: 12px; color: #f59e0b; display: block; margin-top: 2px;">Rp 0 / bln</b>
+            </div>
           </div>
-          <div class="coord-row" style="margin-top: 4px;">
-            <span>Longitude:</span> <strong id="val-lng" class="coord-val">-</strong>
+        </section>
+
+        <section class="section-card">
+          <h3 class="section-title">Urutan Kontribusi Brand (Terbesar)</h3>
+          <div id="profil-outlet-brand-list">
+            <div style="color: #cbd5e1; font-size: 11px;">Klik titik toko pada peta untuk melihat breakdown brand.</div>
           </div>
         </section>
       </div>
-
     </div>
 
     <footer class="sidebar-footer">
-      <div class="footer-system">SpotRevenue System v4.3</div>
-      <div class="footer-dev">Developer: <b>Urai Ikhsan Fadhilah</b></div>
+      <div>SpotRevenue v4.6</div>
+      <div>Developer: <b>Urai Ikhsan Fadhilah</b></div>
     </footer>
   </aside>
 
+  <!-- ELEMEN PETA UTAMA -->
   <main id="map"></main>
 
-  <!-- DATABASE & MAP CONTROLLER -->
+  <!-- SCRIPT BASE MODULAR -->
   <script src="js/db.js"></script>
+  <script src="modules/ui.js"></script>
+  <script src="modules/spatial.js"></script>
+  <script src="modules/intel.js"></script>
+  <script src="modules/dashboard.js"></script>
   <script src="js/map.js"></script>
-
-  <!-- MAIN APP CONTROLLER -->
   <script src="js/app.js"></script>
 
-  <!-- EVENT HANDLER PENAMBUNG MODUL & KONTROL FULL INTERAKSI -->
+  <!-- SKRIP LOGIK DIRECT HANDLER DAN HIGHLIGHT TOMBOL METRIK -->
   <script>
-    document.addEventListener('DOMContentLoaded', () => {
-      // 1. KONTROL DASHBOARD FULLSCREEN
-      window.openFullDashboard = function() {
-        const fullDash = document.getElementById('fullscreen-dashboard');
-        if (fullDash) fullDash.style.display = 'flex';
-        if (typeof updateDashboardAnalytics === 'function') updateDashboardAnalytics();
-      };
+    function switchModulePane(modulId, btnEl) {
+      const panes = document.querySelectorAll('.module-content-pane');
+      panes.forEach(p => p.classList.remove('active'));
 
-      window.closeFullDashboard = function() {
-        const fullDash = document.getElementById('fullscreen-dashboard');
-        if (fullDash) fullDash.style.display = 'none';
-      };
+      const targetPane = document.getElementById(modulId);
+      if (targetPane) targetPane.classList.add('active');
 
-      // Buka dashboard secara otomatis saat halaman pertama dibuka
-      openFullDashboard();
+      const navBtns = document.querySelectorAll('.btn-module-nav');
+      navBtns.forEach(b => b.classList.remove('active'));
+      if (btnEl) btnEl.classList.add('active');
+    }
 
-      const btnNavDash = document.getElementById('btn-nav-dash-open');
-      const btnCloseDash = document.getElementById('btn-close-dashboard');
-
-      if (btnNavDash) btnNavDash.addEventListener('click', openFullDashboard);
-      if (btnCloseDash) btnCloseDash.addEventListener('click', closeFullDashboard);
-
-      // 2. KONTROL HEADER DASHBOARD
-      // A. Select Tahun
-      const dashSelectTahun = document.getElementById('dash-select-tahun');
-      if (dashSelectTahun) {
-        dashSelectTahun.addEventListener('change', (e) => {
-          const selTahun = document.getElementById('select-tahun');
-          if (selTahun) {
-            selTahun.value = e.target.value;
-            selTahun.dispatchEvent(new Event('change'));
-          }
-        });
+    function openDashboardUI() {
+      const dashEl = document.getElementById('fullscreen-dashboard');
+      if (dashEl) {
+        dashEl.style.display = 'block';
+        dashEl.classList.add('active');
+        if (typeof window.triggerGlobalFilterPipeline === 'function') {
+          window.triggerGlobalFilterPipeline();
+        }
       }
+    }
 
-      // B. Mode Kalkulasi (TOTAL / AVERAGE)
-      const dashCalcBtns = document.querySelectorAll('.dash-calc-btn');
-      dashCalcBtns.forEach(btn => {
-        btn.addEventListener('click', () => {
-          const mode = btn.getAttribute('data-dash-calc');
-          dashCalcBtns.forEach(b => b.classList.remove('active'));
-          btn.classList.add('active');
-
-          if (typeof setDashboardCalcMode === 'function') {
-            setDashboardCalcMode(mode);
-          }
-        });
-      });
-
-      // C. Metrik Penjualan (VALUE / BOX / UOM)
-      const dashMetricBtns = document.querySelectorAll('.dash-metric-btn');
-      dashMetricBtns.forEach(btn => {
-        btn.addEventListener('click', async () => {
-          const m = btn.getAttribute('data-dash-metric');
-          dashMetricBtns.forEach(b => b.classList.remove('active'));
-          btn.classList.add('active');
-
-          if (typeof switchActiveMetric === 'function') {
-            await switchActiveMetric(m);
-          }
-        });
-      });
-
-      // D. Pill Pilih Bulan (JAN - DEC)
-      const dashMonthPills = document.querySelectorAll('.dash-month-pill');
-      dashMonthPills.forEach(pill => {
-        pill.addEventListener('click', () => {
-          const m = pill.getAttribute('data-dash-month');
-          if (typeof toggleDashboardMonth === 'function') {
-            toggleDashboardMonth(m, pill);
-          } else {
-            pill.classList.toggle('active');
-          }
-        });
-      });
-
-      // E. Heatmap Peta
-      const btnDashHeat = document.getElementById('btn-dash-toggle-heatmap');
-      if (btnDashHeat) {
-        btnDashHeat.addEventListener('click', () => {
-          const mainHeatBtn = document.getElementById('btn-toggle-heatmap');
-          if (mainHeatBtn) mainHeatBtn.click();
-          closeFullDashboard();
-        });
+    function closeDashboardUI() {
+      const dashEl = document.getElementById('fullscreen-dashboard');
+      if (dashEl) {
+        dashEl.style.display = 'none';
+        dashEl.classList.remove('active');
       }
+      if (window.map) window.map.invalidateSize();
+    }
 
-      // F. Filter Kinerja Toko (Top Tier Pareto / Low Performer)
-      const perfBtns = document.querySelectorAll('.btn-perf-filter');
-      perfBtns.forEach(btn => {
-        btn.addEventListener('click', () => {
-          const perf = btn.getAttribute('data-perf');
-          if (typeof filterByPerformance === 'function') {
-            filterByPerformance(perf);
-          }
-        });
+    // FUNGSI SWITCH METRIK DENGAN WARNA AKTIF MERAH TERANG (#dc2626)
+    function switchMetric(metricKey, btnEl) {
+      window.currentMetric = metricKey;
+      
+      const sidebarBtns = document.querySelectorAll('.btn-metric');
+      sidebarBtns.forEach(b => {
+        const isTarget = b.getAttribute('data-metric') === metricKey;
+        if (isTarget) {
+          b.classList.add('active');
+        } else {
+          b.classList.remove('active');
+        }
       });
 
-      // 3. KONTROL TAB NAVIGASI SIDEBAR
-      const moduleBtns = document.querySelectorAll('.btn-module-nav[data-modul]');
-      const modulePanes = document.querySelectorAll('.module-content-pane');
-
-      moduleBtns.forEach(btn => {
-        btn.addEventListener('click', () => {
-          const targetId = btn.getAttribute('data-modul');
-          moduleBtns.forEach(b => b.classList.remove('active'));
-          modulePanes.forEach(p => p.classList.remove('active'));
-
-          btn.classList.add('active');
-          const targetPane = document.getElementById(targetId);
-          if (targetPane) targetPane.classList.add('active');
-        });
+      const dashBtns = document.querySelectorAll('.btn-dash-metric');
+      dashBtns.forEach(b => {
+        const isActive = b.getAttribute('data-dash-metric') === metricKey;
+        b.classList.toggle('active', isActive);
+        b.style.background = isActive ? '#dc2626' : 'transparent';
+        b.style.color = isActive ? 'white' : '#cbd5e1';
       });
 
-      // 4. OPTIMASI RUTE TOP OUTLET TERDEKAT
-      const btnGenerateRoute = document.getElementById('btn-generate-route');
-      if (btnGenerateRoute) {
-        btnGenerateRoute.addEventListener('click', () => {
-          const originOutlet = window.selectedOutlet;
-          const container = document.getElementById('route-steps-container');
-
-          if (!originOutlet) {
-            alert("Silakan klik salah satu toko pada peta terlebih dahulu sebagai titik awal acuan!");
-            return;
-          }
-
-          const limitVal = parseInt(document.getElementById('select-route-limit')?.value || "10", 10);
-          const allOutlets = window.lastFilteredOutlets || window.activeOutletData || [];
-
-          if (!allOutlets || allOutlets.length === 0) {
-            container.innerHTML = `<div style="color: #ef4444; font-weight: 600;">Data toko belum dimuat atau kosong!</div>`;
-            return;
-          }
-
-          const oLat = parseFloat(originOutlet.lat || originOutlet.latitude);
-          const oLng = parseFloat(originOutlet.lng || originOutlet.longitude);
-
-          if (isNaN(oLat) || isNaN(oLng)) {
-            container.innerHTML = `<div style="color: #ef4444; font-weight: 600;">Koordinat toko acuan tidak valid!</div>`;
-            return;
-          }
-
-          function getDistKm(lat1, lon1, lat2, lon2) {
-            const R = 6371;
-            const dLat = (lat2 - lat1) * Math.PI / 180;
-            const dLon = (lon2 - lon1) * Math.PI / 180;
-            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-                      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-                      Math.sin(dLon/2) * Math.sin(dLon/2);
-            return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)));
-          }
-
-          const candidates = [];
-          allOutlets.forEach(ot => {
-            const tLat = parseFloat(ot.lat || ot.latitude);
-            const tLng = parseFloat(ot.lng || ot.longitude);
-            if (isNaN(tLat) || isNaN(tLng)) return;
-            if (ot.id === originOutlet.id || (ot.name === originOutlet.name && tLat === oLat)) return;
-
-            const dist = getDistKm(oLat, oLng, tLat, tLng);
-            candidates.push({ outlet: ot, distanceKm: dist });
-          });
-
-          candidates.sort((a, b) => a.distanceKm - b.distanceKm);
-          const nearestList = candidates.slice(0, limitVal - 1);
-
-          let html = `
-            <div style="font-weight: 700; color: #0284c7; margin-bottom: 8px; border-bottom: 1px dashed #cbd5e1; padding-bottom: 4px;">
-              📍 Acuan Awal: <b>${originOutlet.name || originOutlet.nama}</b>
-            </div>
-            <div class="route-item-row" style="background: #ecfdf5; border-color: #10b981;">
-              <div>
-                <span class="route-badge-start">AWAL</span>
-                <b style="color: #065f46; font-size: 11px; margin-left: 4px;">${originOutlet.name || originOutlet.nama}</b>
-                <div style="font-size: 9.5px; color: #047857;">Kode: ${originOutlet.cust_no || originOutlet.id || '-'}</div>
-              </div>
-              <span style="font-size: 10px; font-weight: 700; color: #059669;">Titik Acuan</span>
-            </div>
-          `;
-
-          nearestList.forEach((item, idx) => {
-            const distLabel = item.distanceKm < 1 
-              ? `${Math.round(item.distanceKm * 1000)} m` 
-              : `${item.distanceKm.toFixed(2)} km`;
-
-            html += `
-              <div class="route-item-row" onclick="if(window.focusOutletOnMap) window.focusOutletOnMap('${item.outlet.id || item.outlet.cust_no}');">
-                <div>
-                  <span class="route-badge-step">#${idx + 1}</span>
-                  <b style="color: #1e293b; font-size: 11px; margin-left: 4px;">${item.outlet.name || item.outlet.nama}</b>
-                  <div style="font-size: 9.5px; color: #64748b;">Kode: ${item.outlet.cust_no || item.outlet.id || '-'}</div>
-                </div>
-                <div style="text-align: right;">
-                  <span style="font-size: 11px; font-weight: 800; color: #0284c7;">${distLabel}</span>
-                  <div style="font-size: 9px; color: #94a3b8;">jarak lurus</div>
-                </div>
-              </div>
-            `;
-          });
-
-          container.innerHTML = html;
-          
-          if (typeof showToast === 'function') {
-            showToast(`Berhasil menemukan ${nearestList.length + 1} outlet terdekat!`);
-          }
-        });
+      if (typeof window.triggerGlobalFilterPipeline === 'function') {
+        window.triggerGlobalFilterPipeline();
       }
-    });
+    }
+
+    function toggleSidebarPin() {
+      const sidebar = document.getElementById('sidebar');
+      const pinBtn = document.getElementById('btn-pin-sidebar');
+      if (sidebar) sidebar.classList.toggle('pinned');
+      if (pinBtn) pinBtn.classList.toggle('active');
+    }
+
+    function togglePasswordVisibility() {
+      const pinInput = document.getElementById('auth-pin-input');
+      const eyeIcon = document.getElementById('eye-icon');
+      if (!pinInput) return;
+      const isPassword = pinInput.getAttribute('type') === 'password';
+      pinInput.setAttribute('type', isPassword ? 'text' : 'password');
+      if (eyeIcon) {
+        eyeIcon.innerHTML = isPassword
+          ? `<path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.52 13.52 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" y1="2" x2="22" y2="22"/>`
+          : `<path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>`;
+      }
+    }
+
+    function loginApp(e) {
+      if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+      const user = (document.getElementById('auth-user-input')?.value || '').trim().toLowerCase();
+      const pin = (document.getElementById('auth-pin-input')?.value || '').trim().toLowerCase();
+      const errorMsg = document.getElementById('auth-error-msg');
+      const modal = document.getElementById('auth-modal');
+
+      if (user === 'admin' && (pin === 'spotrev2026' || pin === '')) {
+        if (errorMsg) errorMsg.style.display = 'none';
+        if (modal) modal.style.display = 'none';
+        openDashboardUI();
+        if (typeof window.initMap === 'function') window.initMap();
+      } else {
+        if (errorMsg) {
+          errorMsg.innerText = '❌ Username atau Password salah!';
+          errorMsg.style.display = 'block';
+        }
+      }
+    }
   </script>
 </body>
 </html>
