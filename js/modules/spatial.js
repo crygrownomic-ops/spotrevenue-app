@@ -1,5 +1,5 @@
 /**
- * SpotRevenue - Spatial Buffer & Radius Engine
+ * SpotRevenue - Spatial Buffer & Catchment Radius Engine
  * Lead Developer: Urai Ikhsan Fadhilah
  */
 
@@ -8,16 +8,30 @@ function drawBufferRadius(ot, radiusInKm = 1) {
   
   window.selectedOutlet = ot;
 
-  if (window.bufferGroup) window.bufferGroup.clearLayers();
+  if (!window.bufferGroup) {
+    window.bufferGroup = L.featureGroup().addTo(window.map);
+  }
+  window.bufferGroup.clearLayers();
 
   const lat = parseFloat(ot.lat || ot.latitude);
   const lng = parseFloat(ot.lng || ot.longitude);
 
-  if (isNaN(lat) || isNaN(lng) || (lat === 0 && lng === 0)) return;
+  if (isNaN(lat) || isNaN(lng) || (lat === 0 && lng === 0)) {
+    const bufferInfoEl = document.getElementById('buffer-analysis-result');
+    if (bufferInfoEl) {
+      bufferInfoEl.innerHTML = '<div style="color:#ef4444; font-size:11px; padding:8px;">❌ Koordinat toko tidak valid.</div>';
+    }
+    return;
+  }
 
-  const radiusInMeters = radiusInKm * 1000;
+  let effectiveRadiusKm = parseFloat(radiusInKm);
+  if (isNaN(effectiveRadiusKm) || effectiveRadiusKm <= 0) {
+    effectiveRadiusKm = 1;
+  }
+
+  const radiusInMeters = effectiveRadiusKm * 1000;
   
-  // FIX: interactive: false agar klik mouse tembus ke toko di bawah lingkaran radius
+  // Gambar lingkaran merah transparan (interactive: false agar klik mouse menembus ke marker toko)
   const bufferCircle = L.circle([lat, lng], {
     radius: radiusInMeters,
     color: '#dc2626',
@@ -38,86 +52,146 @@ function drawBufferRadius(ot, radiusInKm = 1) {
   const activeMonths = window.currentMonthRange || ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
   const monthCount = activeMonths.length > 0 ? activeMonths.length : 1;
 
-  // Menggunakan dataset aktif hasil filter jika tersedia
   const baseList = (window.lastFilteredOutlets && window.lastFilteredOutlets.length > 0)
     ? window.lastFilteredOutlets 
-    : (window.masterData?.val || []);
+    : (typeof window.getActiveDataset === 'function' ? window.getActiveDataset() : (window.masterData?.val || window.masterData?.box || []));
 
-  const boxList = window.masterData?.box || [];
-  const uomList = window.masterData?.uom || [];
+  // Hash Map O(1) Kilat
+  const boxMap = new Map();
+  (window.masterData?.box || []).forEach(b => {
+    const c = String(b.customer_number || b.cust_no || b.id || '').trim().toUpperCase();
+    if (c && c !== '-') boxMap.set(c, b);
+  });
+
+  const valMap = new Map();
+  (window.masterData?.val || []).forEach(v => {
+    const c = String(v.customer_number || v.cust_no || v.id || '').trim().toUpperCase();
+    if (c && c !== '-') valMap.set(c, v);
+  });
+
+  const uomMap = new Map();
+  (window.masterData?.uom || []).forEach(u => {
+    const c = String(u.customer_number || u.cust_no || u.id || '').trim().toUpperCase();
+    if (c && c !== '-') uomMap.set(c, u);
+  });
+
+  const getSalesVal = (item) => {
+    if (!item) return 0;
+    if (item.monthly_sales && typeof item.monthly_sales === 'object') {
+      let total = 0;
+      activeMonths.forEach(m => {
+        const v = item.monthly_sales[m];
+        total += typeof v === 'number' ? (isNaN(v) ? 0 : v) : (parseFloat(v) || 0);
+      });
+      return total;
+    }
+    return parseFloat(item.calculated_sales || item.total_sales || item.omset || 0) || 0;
+  };
+
+  const centerLatLng = L.latLng(lat, lng);
 
   baseList.forEach(other => {
     const oLat = parseFloat(other.lat || other.latitude);
     const oLng = parseFloat(other.lng || other.longitude);
+    
+    // Validasi Koordinat Toko Lain
     if (isNaN(oLat) || isNaN(oLng) || (oLat === 0 && oLng === 0)) return;
 
-    const distMeters = window.map.distance([lat, lng], [oLat, oLng]);
+    const distMeters = centerLatLng.distanceTo(L.latLng(oLat, oLng));
     if (distMeters <= radiusInMeters) {
       nearbyCount++;
 
-      let oVal = 0;
-      if (other.monthly_sales && typeof other.monthly_sales === 'object') {
-        activeMonths.forEach(m => oVal += (other.monthly_sales[m] || 0));
-      } else {
-        oVal = other.total_sales || other.calculated_sales || 0;
-      }
-      sumVal += oVal;
+      const otherCode = String(other.customer_number || other.cust_no || other.id || '').trim().toUpperCase();
 
-      const otherCode = String(other.customer_number || other.cust_no || other.id);
+      const vMatch = valMap.get(otherCode);
+      sumVal += vMatch ? getSalesVal(vMatch) : getSalesVal(other);
 
-      const bMatch = boxList.find(b => String(b.customer_number || b.cust_no || b.id) === otherCode);
-      if (bMatch) {
-        let oBox = 0;
-        if (bMatch.monthly_sales && typeof bMatch.monthly_sales === 'object') {
-          activeMonths.forEach(m => oBox += (bMatch.monthly_sales[m] || 0));
-        } else {
-          oBox = bMatch.total_sales || 0;
-        }
-        sumBox += oBox;
-      }
+      const bMatch = boxMap.get(otherCode);
+      sumBox += bMatch ? getSalesVal(bMatch) : (window.currentMetric === 'box' ? getSalesVal(other) : 0);
 
-      const uMatch = uomList.find(u => String(u.customer_number || u.cust_no || u.id) === otherCode);
-      if (uMatch) {
-        let oUom = 0;
-        if (uMatch.monthly_sales && typeof uMatch.monthly_sales === 'object') {
-          activeMonths.forEach(m => oUom += (uMatch.monthly_sales[m] || 0));
-        } else {
-          oUom = uMatch.total_sales || 0;
-        }
-        sumUom += oUom;
-      }
+      const uMatch = uomMap.get(otherCode);
+      sumUom += uMatch ? getSalesVal(uMatch) : (window.currentMetric === 'uom' ? getSalesVal(other) : 0);
     }
   });
 
-  const isAvgMode = window.currentCalcMode === 'avg';
-  const valFormatted = Math.round(isAvgMode ? sumVal/monthCount : sumVal).toLocaleString('id-ID');
-  const boxFormatted = Math.round(isAvgMode ? sumBox/monthCount : sumBox).toLocaleString('id-ID');
-  const uomFormatted = Math.round(isAvgMode ? sumUom/monthCount : sumUom).toLocaleString('id-ID');
-  const avgSuffix = isAvgMode ? ' / bln' : '';
+  const avgValPerOutlet = nearbyCount > 0 ? (sumVal / nearbyCount) : 0;
+  const avgBoxPerOutlet = nearbyCount > 0 ? (sumBox / nearbyCount) : 0;
+  const avgUomPerOutlet = nearbyCount > 0 ? (sumUom / nearbyCount) : 0;
 
+  const avgValPerMonth = sumVal / monthCount;
+  const avgBoxPerMonth = sumBox / monthCount;
+  const avgUomPerMonth = sumUom / monthCount;
+
+  const fmt = (num) => Math.round(num || 0).toLocaleString('id-ID');
+
+  // Menulis Hasil Analisis Langsung Ke Layar
   const bufferInfoEl = document.getElementById('buffer-analysis-result');
   if (bufferInfoEl) {
     bufferInfoEl.innerHTML = `
-      <div style="background: #121212; padding: 12px; border-radius: 8px; border: 1px solid rgba(220,38,38,0.4); margin-top: 10px; font-size: 11.5px; color:#ffffff;">
-        <div style="font-weight: 700; font-size: 12px; color: #f59e0b; margin-bottom: 6px; display: flex; align-items: center; gap: 6px;">
-          <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
-          <span>Potensi Area Radius ${radiusInKm} KM:</span>
+      <div style="background: #121212; padding: 14px; border-radius: 12px; border: 1px solid rgba(220,38,38,0.5); margin-top: 10px; font-size: 11.5px; color:#ffffff; box-shadow: 0 4px 15px rgba(0,0,0,0.5);">
+        
+        <div style="font-weight: 700; font-size: 12.5px; color: #f59e0b; margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 6px;">
+          <div style="display:flex; align-items:center; gap:6px;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
+            <span>Analisis Catchment ${effectiveRadiusKm} KM</span>
+          </div>
+          <span style="background:rgba(220,38,38,0.25); color:#fca5a5; padding:2px 8px; border-radius:12px; font-size:10.5px; font-weight:bold;">${nearbyCount} Outlet</span>
         </div>
-        <div style="color: #ffffff; margin-bottom: 6px;">• Toko Terlingkup: <b>${nearbyCount} Toko</b></div>
-        <div style="border-top: 1px dashed rgba(255,255,255,0.2); padding-top: 8px; display:flex; flex-direction:column; gap:6px; color:#ffffff;">
-          <div style="display: flex; align-items: center; gap: 6px;">
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-            <span><b>Rupiah (VAL):</b> Rp ${valFormatted}${avgSuffix}</span>
-          </div>
-          <div style="display: flex; align-items: center; gap: 6px;">
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>
-            <span><b>Karton (BOX):</b> ${boxFormatted} Box${avgSuffix}</span>
-          </div>
-          <div style="display: flex; align-items: center; gap: 6px;">
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2"><path d="M12 2H2v10l9.29 9.29c.94.94 2.48.94 3.42 0l6.58-6.58c.94-.94.94-2.48 0-3.42L12 2Z"/><path d="M7 7h.01"/></svg>
-            <span><b>Satuan (UOM):</b> ${uomFormatted} UOM${avgSuffix}</span>
+
+        <div style="margin-bottom: 10px;">
+          <div style="font-size:10px; color:#f59e0b; font-weight:700; text-transform:uppercase; margin-bottom:4px;">TOTAL PENJUALAN RADIUS AREA:</div>
+          <div style="display:flex; flex-direction:column; gap:4px; background:rgba(255,255,255,0.03); padding:8px; border-radius:8px; border:1px solid rgba(255,255,255,0.08);">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <span style="color:#cbd5e1;">💵 Value (VAL):</span>
+              <b style="color:#ef4444; font-size:12px;">Rp ${fmt(sumVal)}</b>
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <span style="color:#cbd5e1;">📦 Volume (BOX):</span>
+              <b style="color:#f59e0b; font-size:12px;">${fmt(sumBox)} Karton</b>
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <span style="color:#cbd5e1;">🏷️ Unit (UOM):</span>
+              <b style="color:#38bdf8; font-size:12px;">${fmt(sumUom)} Pcs</b>
+            </div>
           </div>
         </div>
+
+        <div style="margin-bottom: 10px;">
+          <div style="font-size:10px; color:#38bdf8; font-weight:700; text-transform:uppercase; margin-bottom:4px;">RATA-RATA PER OUTLET IN-RADIUS:</div>
+          <div style="display:flex; flex-direction:column; gap:4px; background:rgba(0,0,0,0.3); padding:8px; border-radius:8px; border:1px solid rgba(255,255,255,0.05);">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <span style="color:#94a3b8;">AVG Value / Outlet:</span>
+              <b style="color:#ffffff;">Rp ${fmt(avgValPerOutlet)}</b>
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <span style="color:#94a3b8;">AVG Box / Outlet:</span>
+              <b style="color:#ffffff;">${fmt(avgBoxPerOutlet)} Ktn</b>
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <span style="color:#94a3b8;">AVG Uom / Outlet:</span>
+              <b style="color:#ffffff;">${fmt(avgUomPerOutlet)} Pcs</b>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div style="font-size:10px; color:#a855f7; font-weight:700; text-transform:uppercase; margin-bottom:4px;">RATA-RATA PER BULAN (${monthCount} Bln):</div>
+          <div style="display:flex; flex-direction:column; gap:4px; background:rgba(0,0,0,0.3); padding:8px; border-radius:8px; border:1px solid rgba(255,255,255,0.05);">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <span style="color:#94a3b8;">AVG Value / Bln:</span>
+              <b style="color:#ffffff;">Rp ${fmt(avgValPerMonth)}</b>
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <span style="color:#94a3b8;">AVG Box / Bln:</span>
+              <b style="color:#ffffff;">${fmt(avgBoxPerMonth)} Ktn</b>
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <span style="color:#94a3b8;">AVG Uom / Bln:</span>
+              <b style="color:#ffffff;">${fmt(avgUomPerMonth)} Pcs</b>
+            </div>
+          </div>
+        </div>
+
       </div>
     `;
   }
