@@ -110,6 +110,15 @@
       color: #ffffff;
     }
 
+    /* FLOATING GLOBAL SEARCH BAR (POSISI TENGAH ATAS) */
+    #global-search-container {
+      position: absolute;
+      top: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1000;
+    }
+
     .search-suggestions-list {
       position: absolute;
       top: 100%;
@@ -245,7 +254,6 @@
       box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04) !important;
     }
 
-    /* MENANGGULANGI INLINE STYLE BACKGROUND PADA DIV DAN BUTTON DI LIGHT MODE */
     body.theme-light div[style*="background: #121212"],
     body.theme-light div[style*="background:#121212"],
     body.theme-light div[style*="background: #1e1e1e"],
@@ -422,7 +430,7 @@
   </div>
 
   <!-- FLOATING GLOBAL SEARCH BAR -->
-  <div id="global-search-container" style="position: relative;">
+  <div id="global-search-container">
     <div class="search-input-box" style="display: flex; align-items: center; background: #1e1e1e; border: 1px solid #dc2626; border-radius: 8px; padding: 6px 12px; gap: 8px;">
       <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
       <input type="text" id="global-search-input" placeholder="Cari Nama Toko atau Kode Customer..." autocomplete="off" style="background: transparent; border: none; color: #ffffff; outline: none; font-size: 12px; width: 240px;" />
@@ -527,37 +535,54 @@
       </div>
     </header>
 
-    <div class="kpi-grid" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px;">
+    <!-- GRID KPI 6 KARTU -->
+    <div class="kpi-grid" style="display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; margin-bottom: 16px;">
       <div class="dash-card">
         <div style="color: #a3a3a3; font-size: 11px;">Total Outlet Aktif</div>
-        <div id="full-kpi-outlet" style="font-size: 20px; font-weight: 700; color: #ffffff; margin-top: 4px;">0 Toko</div>
+        <div id="full-kpi-outlet" style="font-size: 18px; font-weight: 700; color: #ffffff; margin-top: 4px;">0 Toko</div>
       </div>
       <div class="dash-card">
         <div style="color: #a3a3a3; font-size: 11px;" id="label-full-kpi-omset">Akumulasi Total Value</div>
-        <div id="full-kpi-omset" style="font-size: 20px; font-weight: 700; color: #ef4444; margin-top: 4px;">Rp 0</div>
+        <div id="full-kpi-omset" style="font-size: 18px; font-weight: 700; color: #ef4444; margin-top: 4px;">Rp 0</div>
       </div>
       <div class="dash-card">
         <div style="color: #a3a3a3; font-size: 11px;">Rata-Rata Penjualan / Toko</div>
-        <div id="full-kpi-avg" style="font-size: 20px; font-weight: 700; color: #ffffff; margin-top: 4px;">Rp 0</div>
+        <div id="full-kpi-avg" style="font-size: 18px; font-weight: 700; color: #ffffff; margin-top: 4px;">Rp 0</div>
       </div>
       <div class="dash-card">
         <div style="color: #a3a3a3; font-size: 11px;">Kecamatan Utama (Top Tier)</div>
         <div id="full-kpi-top-kec" style="font-size: 16px; font-weight: 700; color: #ef4444; margin-top: 4px;">-</div>
       </div>
+      <div class="dash-card">
+        <div style="color: #a3a3a3; font-size: 11px;">Tingkat Keaktifan Transaksi</div>
+        <div id="full-kpi-active-rate" style="font-size: 16px; font-weight: 700; color: #10b981; margin-top: 4px;">0%</div>
+      </div>
+      <div class="dash-card">
+        <div style="color: #a3a3a3; font-size: 11px;">Konsentrasi Pareto (Top 20%)</div>
+        <div id="full-kpi-pareto" style="font-size: 14px; font-weight: 700; color: #f59e0b; margin-top: 4px;">0%</div>
+      </div>
     </div>
 
-    <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 12px; margin-bottom: 16px;">
+    <!-- GRID GRAFIK DASHBOARD (TOP BRANDS, TREN BULANAN, & WIDGET MATRIKS BCG) -->
+    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 16px;">
       <div class="dash-card">
         <h3 style="font-size: 13px; font-weight: 600; margin-bottom: 12px; color: #ffffff;">Grafik Penjualan Top Portofolio Brand</h3>
-        <div style="position: relative; height: 240px; width: 100%;">
+        <div style="position: relative; height: 220px; width: 100%;">
           <canvas id="chart-top-brands"></canvas>
         </div>
       </div>
       <div class="dash-card">
-        <h3 style="font-size: 13px; font-weight: 600; margin-bottom: 12px; color: #ffffff;">Filter Performa Toko</h3>
+        <h3 style="font-size: 13px; font-weight: 600; margin-bottom: 12px; color: #ffffff;">Tren Penjualan Bulanan</h3>
+        <div style="position: relative; height: 220px; width: 100%;">
+          <canvas id="chart-monthly-trend"></canvas>
+        </div>
+      </div>
+      <div class="dash-card">
+        <h3 style="font-size: 13px; font-weight: 600; margin-bottom: 12px; color: #ffffff;">Filter Performa & Matriks BCG</h3>
+        <div id="dash-bcg-summary-container" style="margin-bottom: 12px;"></div>
         <div style="display: flex; flex-direction: column; gap: 8px;">
-          <button id="btn-filter-top-tier" style="background: #dc2626; color: white; border: none; padding: 10px; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 11px;">Top Tier (Pareto 20% Teratas)</button>
-          <button id="btn-filter-low-performer" style="background: #262626; color: #ffffff; border: 1px solid #404040; padding: 10px; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 11px;">Low Performer (Evaluasi Penjualan)</button>
+          <button id="btn-filter-top-tier" onclick="window.setPerformanceFilter('top')" style="background: #dc2626; color: white; border: none; padding: 8px; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 11px;">Top Tier (Pareto 20% Teratas)</button>
+          <button id="btn-filter-low-performer" onclick="window.setPerformanceFilter('low')" style="background: #262626; color: #ffffff; border: 1px solid #404040; padding: 8px; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 11px;">Low Performer (Evaluasi Penjualan)</button>
         </div>
       </div>
     </div>
@@ -855,7 +880,7 @@
     </div>
 
     <footer class="sidebar-footer" style="padding:10px; border-top:1px solid #333333; font-size:10px; color:#a3a3a3;">
-      <div>SpotRevenue v4.8</div>
+      <div>SpotRevenue v5.0</div>
       <div id="pwa-status-text">PWA: Active</div>
       <div>Developer: <b style="color:#ffffff;">Urai Ikhsan Fadhilah</b></div>
     </footer>

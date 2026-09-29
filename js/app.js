@@ -69,7 +69,7 @@ window.lastAnomalySet = lastAnomalySet;
 
 window.quadrantStats = { stars: 0, cows: 0, questions: 0, risks: 0 };
 
-/* HELPER DENGAN FORMATTING METRIK SESUAI SPESIFIKASI ABAH */
+/* HELPER DENGAN FORMATTING METRIK SESUAI SPESIFIKASI */
 function formatMetricValue(val, metric = activeMetric) {
   const formatted = Math.round(val || 0).toLocaleString('id-ID');
   if (metric === 'val') return `Rp ${formatted}`;
@@ -114,7 +114,6 @@ function injectThemeStyles() {
   }
 
   styleEl.innerHTML = `
-    /* TEMA TERANG UNTUK SIDEBAR, PANEL, MODAL, DAN HASIL ANALISIS APLIKASI */
     body.theme-light #sidebar,
     body.theme-light .sidebar-container,
     body.theme-light .module-content-pane,
@@ -496,7 +495,6 @@ function setupSpatialModuleListeners() {
   }
 }
 
-/* CATCHMENT RADIUS MULTI-METRIK (VALUE, BOX, UOM) + RERATA BULAN */
 async function updateBufferZoneAnalysis() {
   const radiusSelect = document.getElementById('select-buffer-radius');
   const resultBox = document.getElementById('buffer-analysis-result');
@@ -1367,7 +1365,6 @@ function renderWidgetMonthPills() {
   container.innerHTML = html;
 }
 
-/* DUPLIKASI PRESET DENGAN PINTASAN LENGKAP (YTD, Q1-Q4, LAST 3 MONTHS) */
 function setDashboardMonthPreset(preset) {
   if (preset === 'all' || preset === 'ytd') selectedMonths = [...ALL_MONTHS];
   else if (preset === 'q1') selectedMonths = ['JAN', 'FEB', 'MAR'];
@@ -1816,6 +1813,17 @@ function applyFilters() {
   updateBufferZoneAnalysis();
 }
 
+window.setPerformanceFilter = function(mode) {
+  if (activePerfFilter === mode) {
+    activePerfFilter = null;
+    showToast("Filter Performa Dilepas");
+  } else {
+    activePerfFilter = mode;
+    showToast(`Filter Performa Terpasang: ${mode === 'top' ? '20% Teratas (Pareto)' : '20% Terbawah (Low Performer)'}`);
+  }
+  applyFilters();
+};
+
 function updateDashboardAnalytics() {
   const dataset = (window.lastFilteredOutlets && window.lastFilteredOutlets.length > 0) 
                   ? window.lastFilteredOutlets 
@@ -1873,7 +1881,6 @@ function updateDashboardAnalytics() {
   const avgPerOutlet = totalOutlet > 0 ? (totalOmset / totalOutlet) : 0;
   const activeRate = totalOutlet > 0 ? ((activeOutletCount / totalOutlet) * 100).toFixed(1) : '0';
 
-  /* KALKULASI KONSENTRASI PARETO 80/20 */
   const sortedOutlets = [...dataset].sort((a,b) => (b.current_total || 0) - (a.current_total || 0));
   const top20Count = Math.max(1, Math.ceil(totalOutlet * 0.2));
   const top20Sales = sortedOutlets.slice(0, top20Count).reduce((sum, o) => sum + (o.current_total || 0), 0);
@@ -1902,14 +1909,13 @@ function updateDashboardAnalytics() {
   if (elAvg) elAvg.innerText = formatMetricValue(avgPerOutlet, currentMetric);
   if (elTopKec) elTopKec.innerText = topKec;
 
-  if (elActiveRate) elActiveRate.innerText = `${activeRate}% (${activeOutletCount.toLocaleString('id-ID')} Transaksi)`;
-  if (elPareto) elPareto.innerText = `Top 20% (${top20Count} Toko) = ${paretoPct}% Omset`;
+  if (elActiveRate) elActiveRate.innerText = `${activeRate}% (${activeOutletCount.toLocaleString('id-ID')} Toko)`;
+  if (elPareto) elPareto.innerText = `${paretoPct}% Omset`;
 
   if (elLabelOmset) {
     elLabelOmset.innerText = dashCalcMode === 'avg' ? `Akumulasi Rata-Rata (${metricUpper})` : `Akumulasi Total (${metricUpper})`;
   }
 
-  /* DRILL-DOWN INTERAKTIF PADA RANK LIST TOP 5 ITEM */
   renderRankList('full-rank-brands', brandMap, (v) => formatMetricValue(v, currentMetric), 'brand');
   renderRankList('full-rank-kecamatan', kecMap, (v) => formatMetricValue(v, currentMetric), 'kecamatan');
   renderRankList('full-rank-sales', salesMap, (v) => formatMetricValue(v, currentMetric), 'salesperson');
@@ -2008,7 +2014,6 @@ function renderBrandChart(brandMap, metricLabel) {
   });
 }
 
-/* FUNGSI TREN TREN BULANAN LINE CHART */
 function renderTrendChart(monthlyTotals, metricLabel) {
   const ctx = document.getElementById('chart-monthly-trend');
   if (!ctx || typeof Chart === 'undefined') return;
@@ -2045,7 +2050,6 @@ function renderTrendChart(monthlyTotals, metricLabel) {
   });
 }
 
-/* WIDGET MATRIKS BCG INTERAKTIF DASHBOARD */
 function renderDashboardBCGWidget() {
   const container = document.getElementById('dash-bcg-summary-container');
   if (!container) return;
